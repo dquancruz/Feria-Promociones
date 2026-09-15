@@ -16,6 +16,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/apps/backend/package.json ./package.json
 COPY --from=build /repo/apps/backend/dist ./dist
+COPY --from=build /repo/apps/backend/migrations ./migrations
 COPY --from=build /repo/node_modules ./node_modules
 ENV PORT=4000
 EXPOSE 4000

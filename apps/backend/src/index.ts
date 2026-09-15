@@ -1,7 +1,22 @@
+import 'dotenv/config';
 import { createApp } from './app.js';
+import { createPool } from './db/pool.js';
+import { runMigrations } from './db/migrate.js';
+import { seedCatalog } from './db/seed.js';
 
 const port = Number(process.env.PORT ?? 4000);
+const pool = createPool();
 
-createApp().listen(port, () => {
-  console.log(`Backend listening on port ${port}`);
+async function main(): Promise<void> {
+  await runMigrations(pool);
+  await seedCatalog(pool);
+
+  createApp(pool).listen(port, () => {
+    console.log(`Backend listening on port ${port}`);
+  });
+}
+
+main().catch((err) => {
+  console.error('Failed to start backend', err);
+  process.exit(1);
 });

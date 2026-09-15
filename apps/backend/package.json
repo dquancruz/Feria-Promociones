@@ -6,22 +6,33 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:express --external:cors --external:pg --external:express-session --external:connect-pg-simple --external:express-rate-limit --external:dotenv --external:zod",
     "start": "node dist/index.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@feria/shared": "^0.1.0",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
-    "express": "^4.22.3"
+    "dotenv": "^16.4.5",
+    "express": "^4.22.3",
+    "express-rate-limit": "^7.4.1",
+    "express-session": "^1.18.1",
+    "pg": "^8.13.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/express-session": "^1.18.0",
     "@types/node": "^20.14.15",
+    "@types/pg": "^8.11.10",
     "@types/supertest": "^6.0.2",
+    "esbuild": "^0.25.0",
     "eslint": "^9.9.0",
     "supertest": "^7.2.2",
     "tsx": "^4.23.13",
