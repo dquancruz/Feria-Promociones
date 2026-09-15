@@ -7,7 +7,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-feria}
       POSTGRES_DB: ${POSTGRES_DB:-feria}
     ports:
-      - '5432:5432'
+      # Host port 5432 is taken by a local, non-Docker Postgres install on this
+      # machine; 5434 avoids the collision. Only matters for host-side tools
+      # (tests, psql) — the backend container talks to `postgres:5432` internally.
+      - '5434:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
