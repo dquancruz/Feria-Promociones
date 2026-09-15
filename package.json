@@ -1,0 +1,21 @@
+{
+  "name": "feria-promociones",
+  "private": true,
+  "version": "0.1.0",
+  "description": "RSVP and promotions-interest platform for the annual promotions fair.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:frontend": "npm run dev -w apps/frontend",
+    "dev:backend": "npm run dev -w apps/backend"
+  }
+}
