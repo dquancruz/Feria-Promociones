@@ -31,7 +31,7 @@ services:
       NODE_ENV: development
       DATABASE_URL: postgresql://${POSTGRES_USER:-feria}:${POSTGRES_PASSWORD:-feria}@postgres:5432/${POSTGRES_DB:-feria}
       SESSION_SECRET: ${SESSION_SECRET:-dev-secret}
-      CORS_ORIGIN: http://localhost:5173
+      CORS_ORIGIN: http://localhost:4173
     depends_on:
       postgres:
         condition: service_healthy
