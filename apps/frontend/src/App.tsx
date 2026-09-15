@@ -1,8 +1,203 @@
+import type { CatalogItem, RegistrationConfirmation, RegistrationDraftUpdate } from '@feria/shared';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ApiValidationError, confirmRegistration, fetchCatalog, fetchDraft, patchDraft } from './api/client';
+import type { FieldErrors } from './api/client';
+import { CatalogPanel } from './components/CatalogPanel';
+import { ConfirmationScreen } from './components/ConfirmationScreen';
+import { Header } from './components/Header';
+import type { InfoPanelValues } from './components/InfoPanel';
+import { InfoPanel } from './components/InfoPanel';
+import { SiteFooter } from './components/SiteFooter';
+import { useDebouncedCallback } from './hooks/useDebouncedCallback';
+import { combineDateAndTime, splitIsoDateTime } from './utils/datetime';
+import { computePreview } from './utils/discountPreview';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type Phase = 'loading' | 'form' | 'confirmed' | 'error';
+
 function App() {
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [values, setValues] = useState<InfoPanelValues>({ nombre: '', apellidos: '', email: '', date: '', time: '' });
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [catalogById, setCatalogById] = useState<Map<string, CatalogItem>>(new Map());
+  const [visibleItems, setVisibleItems] = useState<CatalogItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [confirmation, setConfirmation] = useState<RegistrationConfirmation | null>(null);
+
+  const skipNextAutosaveRef = useRef(false);
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+  const selectedItemIdsRef = useRef(selectedItemIds);
+  selectedItemIdsRef.current = selectedItemIds;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [draft, catalog] = await Promise.all([fetchDraft(), fetchCatalog('')]);
+        if (cancelled) return;
+
+        setCatalogById(new Map(catalog.items.map((item) => [item.id, item])));
+        setVisibleItems(catalog.items);
+
+        if (draft.status === 'confirmed') {
+          setConfirmation(draft);
+          setPhase('confirmed');
+          return;
+        }
+
+        const { date, time } = splitIsoDateTime(draft.attendAt);
+        skipNextAutosaveRef.current = true;
+        setValues({ nombre: draft.nombre, apellidos: draft.apellidos, email: draft.email, date, time });
+        setSelectedItemIds(new Set(draft.selectedItemIds));
+        setPhase('form');
+      } catch {
+        if (!cancelled) setPhase('error');
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const buildDraftPayload = useCallback((): RegistrationDraftUpdate => {
+    const current = valuesRef.current;
+    const payload: RegistrationDraftUpdate = { selectedItemIds: Array.from(selectedItemIdsRef.current) };
+    if (current.nombre.trim()) payload.nombre = current.nombre.trim();
+    if (current.apellidos.trim()) payload.apellidos = current.apellidos.trim();
+    if (current.email.trim() && EMAIL_PATTERN.test(current.email.trim())) payload.email = current.email.trim();
+    const attendAt = combineDateAndTime(current.date, current.time);
+    if (attendAt) payload.attendAt = attendAt;
+    return payload;
+  }, []);
+
+  const { debounced: debouncedSave } = useDebouncedCallback(() => {
+    patchDraft(buildDraftPayload())
+      .then(() => setSaveError(null))
+      .catch((err: unknown) => {
+        if (!(err instanceof ApiValidationError)) {
+          setSaveError('No se pudieron guardar los últimos cambios. Se reintentará automáticamente.');
+        }
+      });
+  }, 800);
+
+  useEffect(() => {
+    if (phase !== 'form') return;
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false;
+      return;
+    }
+    debouncedSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values, selectedItemIds, phase]);
+
+  const { debounced: debouncedSearch } = useDebouncedCallback((term: string) => {
+    setCatalogLoading(true);
+    fetchCatalog(term)
+      .then((res) => setVisibleItems(res.items))
+      .catch(() => {
+        /* keep showing the previous results if the search request fails */
+      })
+      .finally(() => setCatalogLoading(false));
+  }, 300);
+
+  function handleValueChange<Field extends keyof InfoPanelValues>(field: Field, value: InfoPanelValues[Field]) {
+    setValues((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleSearchChange(term: string) {
+    setSearch(term);
+    debouncedSearch(term);
+  }
+
+  function handleToggleItem(id: string) {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleConfirm() {
+    setSubmitting(true);
+    setFieldErrors({});
+    setSaveError(null);
+    try {
+      await patchDraft(buildDraftPayload());
+      const result = await confirmRegistration();
+      setConfirmation(result);
+      setPhase('confirmed');
+    } catch (err) {
+      if (err instanceof ApiValidationError) {
+        setFieldErrors(err.fieldErrors);
+      } else {
+        setSaveError('No se pudo confirmar tu asistencia. Intenta de nuevo.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const preview = useMemo(() => computePreview(catalogById, selectedItemIds), [catalogById, selectedItemIds]);
+
+  if (phase === 'loading') {
+    return (
+      <main className="app-shell">
+        <Header />
+        <p role="status">Cargando…</p>
+      </main>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <main className="app-shell">
+        <Header />
+        <p role="alert">No se pudo cargar el formulario. Verifica tu conexión e intenta de nuevo.</p>
+      </main>
+    );
+  }
+
   return (
-    <main>
-      <h1>Feria de Promociones</h1>
-      <p>El formulario de confirmación de asistencia estará disponible próximamente.</p>
+    <main className="app-shell">
+      <Header />
+
+      {phase === 'confirmed' && confirmation ? (
+        <ConfirmationScreen confirmation={confirmation} />
+      ) : (
+        <div className="form-grid">
+          <InfoPanel values={values} onChange={handleValueChange} fieldErrors={fieldErrors} />
+          <CatalogPanel
+            items={visibleItems}
+            selectedItemIds={selectedItemIds}
+            onToggle={handleToggleItem}
+            search={search}
+            onSearchChange={handleSearchChange}
+            preview={preview}
+            fieldErrors={fieldErrors}
+            onConfirm={() => void handleConfirm()}
+            submitting={submitting}
+            catalogLoading={catalogLoading}
+          />
+        </div>
+      )}
+
+      {saveError && (
+        <p className="save-error" role="status">
+          {saveError}
+        </p>
+      )}
+
+      <SiteFooter />
     </main>
   );
 }
