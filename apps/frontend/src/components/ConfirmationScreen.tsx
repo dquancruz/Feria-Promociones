@@ -13,28 +13,30 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
         Gracias por confirmar. Prepararemos tu portafolio de promociones personalizado con base en tu selección.
       </p>
 
-      <dl className="confirmation-summary">
-        <div>
-          <dt>Número de confirmación</dt>
-          <dd>{confirmation.confirmationId}</dd>
-        </div>
-        <div>
-          <dt>Descuento en Servicios</dt>
-          <dd>
-            {confirmation.serviceDiscountPct}% — {formatAmount(confirmation.servicesTotal)}
-          </dd>
-        </div>
-        <div>
-          <dt>Descuento en Productos</dt>
-          <dd>
-            {confirmation.productDiscountPct}% — {formatAmount(confirmation.productsTotal)}
-          </dd>
-        </div>
-        <div>
-          <dt>Total</dt>
-          <dd>{formatAmount(confirmation.grandTotal)}</dd>
-        </div>
-      </dl>
+      <div className="ticket">
+        <dl className="confirmation-summary">
+          <div>
+            <dt>Número de confirmación</dt>
+            <dd>{confirmation.confirmationId}</dd>
+          </div>
+          <div>
+            <dt>Descuento en Servicios</dt>
+            <dd>
+              {confirmation.serviceDiscountPct}% — {formatAmount(confirmation.servicesTotal)}
+            </dd>
+          </div>
+          <div>
+            <dt>Descuento en Productos</dt>
+            <dd>
+              {confirmation.productDiscountPct}% — {formatAmount(confirmation.productsTotal)}
+            </dd>
+          </div>
+          <div>
+            <dt>Total</dt>
+            <dd>{formatAmount(confirmation.grandTotal)}</dd>
+          </div>
+        </dl>
+      </div>
     </section>
   );
 }

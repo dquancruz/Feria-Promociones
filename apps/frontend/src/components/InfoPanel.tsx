@@ -78,6 +78,7 @@ export function InfoPanel({ values, onChange, fieldErrors }: InfoPanelProps) {
 
       <fieldset className="field">
         <legend>Fecha y hora</legend>
+        <p className="field-hint">La feria se realiza del 12 al 14 de marzo, de 9:00 a.m. a 6:00 p.m.</p>
         <div className="field-row">
           <input
             id="attend-date"

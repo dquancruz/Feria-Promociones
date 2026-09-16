@@ -28,6 +28,7 @@ function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<RegistrationConfirmation | null>(null);
+  const [showRestoredBanner, setShowRestoredBanner] = useState(false);
 
   const skipNextAutosaveRef = useRef(false);
   const valuesRef = useRef(values);
@@ -52,10 +53,14 @@ function App() {
           return;
         }
 
+        const hasExistingProgress =
+          Boolean(draft.nombre || draft.apellidos || draft.email || draft.attendAt) || draft.selectedItemIds.length > 0;
+
         const { date, time } = splitIsoDateTime(draft.attendAt);
         skipNextAutosaveRef.current = true;
         setValues({ nombre: draft.nombre, apellidos: draft.apellidos, email: draft.email, date, time });
         setSelectedItemIds(new Set(draft.selectedItemIds));
+        setShowRestoredBanner(hasExistingProgress);
         setPhase('form');
       } catch {
         if (!cancelled) setPhase('error');
@@ -151,54 +156,75 @@ function App() {
 
   if (phase === 'loading') {
     return (
-      <main className="app-shell">
+      <>
         <Header />
-        <p role="status">Cargando…</p>
-      </main>
+        <main className="app-shell">
+          <p role="status">Cargando…</p>
+        </main>
+      </>
     );
   }
 
   if (phase === 'error') {
     return (
-      <main className="app-shell">
+      <>
         <Header />
-        <p role="alert">No se pudo cargar el formulario. Verifica tu conexión e intenta de nuevo.</p>
-      </main>
+        <main className="app-shell">
+          <p role="alert">No se pudo cargar el formulario. Verifica tu conexión e intenta de nuevo.</p>
+        </main>
+      </>
     );
   }
 
   return (
-    <main className="app-shell">
+    <>
       <Header />
+      <main className="app-shell">
+        {phase === 'confirmed' && confirmation ? (
+          <ConfirmationScreen confirmation={confirmation} />
+        ) : (
+          <>
+            {showRestoredBanner && (
+              <div className="restore-banner" role="status">
+                <p>Continuamos tu registro anterior — revisa tu selección antes de confirmar.</p>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => setShowRestoredBanner(false)}
+                  aria-label="Cerrar aviso"
+                >
+                  Cerrar
+                </button>
+              </div>
+            )}
+            <div className="form-grid">
+              <InfoPanel values={values} onChange={handleValueChange} fieldErrors={fieldErrors} />
+              <div className="furrow-divider" aria-hidden="true" />
+              <CatalogPanel
+                items={visibleItems}
+                selectedItemIds={selectedItemIds}
+                onToggle={handleToggleItem}
+                search={search}
+                onSearchChange={handleSearchChange}
+                preview={preview}
+                fieldErrors={fieldErrors}
+                onConfirm={() => void handleConfirm()}
+                submitting={submitting}
+                catalogLoading={catalogLoading}
+              />
+            </div>
+          </>
+        )}
 
-      {phase === 'confirmed' && confirmation ? (
-        <ConfirmationScreen confirmation={confirmation} />
-      ) : (
-        <div className="form-grid">
-          <InfoPanel values={values} onChange={handleValueChange} fieldErrors={fieldErrors} />
-          <CatalogPanel
-            items={visibleItems}
-            selectedItemIds={selectedItemIds}
-            onToggle={handleToggleItem}
-            search={search}
-            onSearchChange={handleSearchChange}
-            preview={preview}
-            fieldErrors={fieldErrors}
-            onConfirm={() => void handleConfirm()}
-            submitting={submitting}
-            catalogLoading={catalogLoading}
-          />
-        </div>
-      )}
+        {saveError && (
+          <p className="save-error" role="status">
+            {saveError}
+          </p>
+        )}
 
-      {saveError && (
-        <p className="save-error" role="status">
-          {saveError}
-        </p>
-      )}
-
-      <SiteFooter />
-    </main>
+        <SiteFooter />
+      </main>
+    </>
   );
 }
 
