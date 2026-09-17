@@ -189,6 +189,36 @@ describe('registrations draft/confirm flow', () => {
     expect(response.body.fieldErrors).toMatchObject({ attendAt: expect.any(String) });
   });
 
+  it('resets the session without deleting the confirmed registration', async () => {
+    const agent = request.agent(createApp(pool));
+    await agent.get('/api/registrations/draft');
+    await agent.patch('/api/registrations/draft').send({
+      nombre: 'Ana',
+      apellidos: 'Lopez',
+      email: 'ana@example.com',
+      attendAt: '2026-10-01T15:00:00.000Z',
+      selectedItemIds: [serviceA],
+    });
+    await agent.post('/api/registrations/confirm');
+
+    const resetResponse = await agent.post('/api/registrations/session/reset');
+    expect(resetResponse.status).toBe(204);
+
+    const draftResponse = await agent.get('/api/registrations/draft');
+    expect(draftResponse.body).toEqual({
+      status: 'draft',
+      nombre: '',
+      apellidos: '',
+      email: '',
+      attendAt: null,
+      selectedItemIds: [],
+    });
+
+    const { rows } = await pool.query('SELECT status FROM registrations WHERE nombre = $1', ['Ana']);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('confirmed');
+  });
+
   it('ignores unknown or inactive catalog item ids sent by the client', async () => {
     const agent = request.agent(createApp(pool));
     await agent.get('/api/registrations/draft');

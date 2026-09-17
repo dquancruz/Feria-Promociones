@@ -57,5 +57,18 @@ export function createRegistrationsRouter(pool: Pool): Router {
     }),
   );
 
+  router.post(
+    '/session/reset',
+    asyncHandler(async (req, res) => {
+      // Only clears the session so a new draft can start from the same browser.
+      // The confirmed registration row is business data and stays in the database.
+      await new Promise<void>((resolve, reject) => {
+        req.session.destroy((err) => (err ? reject(err) : resolve()));
+      });
+      res.clearCookie('sid');
+      res.status(204).end();
+    }),
+  );
+
   return router;
 }

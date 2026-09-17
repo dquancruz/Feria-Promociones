@@ -441,6 +441,20 @@ button:focus-visible {
   font-size: 0.875rem;
 }
 
+.secondary-button {
+  margin-top: 1.25rem;
+  background: none;
+  border: 1px solid var(--color-line);
+  color: var(--color-text);
+}
+
+.session-indicator {
+  margin: 0.35rem 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-canvas);
+  opacity: 0.85;
+}
+
 .confirmation-summary {
   display: grid;
   gap: 0.6rem;

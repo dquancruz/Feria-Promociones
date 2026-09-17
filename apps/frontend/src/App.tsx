@@ -176,7 +176,7 @@ function App() {
 
   return (
     <>
-      <Header />
+      <Header sessionActive={phase === 'form'} />
       <main className="app-shell">
         {phase === 'confirmed' && confirmation ? (
           <ConfirmationScreen confirmation={confirmation} />
