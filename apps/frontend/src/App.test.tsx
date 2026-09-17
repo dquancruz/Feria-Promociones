@@ -117,6 +117,29 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('5%')).toBeInTheDocument());
   });
 
+  it('sends a cleared field as an empty string in the autosave PATCH, instead of omitting it', async () => {
+    const user = userEvent.setup();
+    const fetchMock = installFetchMock();
+    render(<App />);
+
+    const nombreInput = await screen.findByLabelText('Nombre');
+    await user.type(nombreInput, 'Diego');
+    await user.clear(nombreInput);
+
+    await waitFor(
+      () => {
+        const patchWithClearedNombre = fetchMock.mock.calls.find(([input, init]) => {
+          const url = typeof input === 'string' ? input : input.toString();
+          if (url !== '/api/registrations/draft' || init?.method !== 'PATCH') return false;
+          const body = JSON.parse(init.body as string);
+          return body.nombre === '';
+        });
+        expect(patchWithClearedNombre).toBeDefined();
+      },
+      { timeout: 3000 },
+    );
+  });
+
   it('shows field errors from a failed confirm without leaving the form', async () => {
     const user = userEvent.setup();
     installFetchMock({

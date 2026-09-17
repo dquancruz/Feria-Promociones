@@ -5,9 +5,9 @@ export type RegistrationStatus = z.infer<typeof registrationStatusSchema>;
 
 // PATCH /api/registrations/draft request body: any subset of the draft fields.
 export const registrationDraftUpdateSchema = z.object({
-  nombre: z.string().min(1).optional(),
-  apellidos: z.string().min(1).optional(),
-  email: z.string().email().optional(),
+  nombre: z.string().optional(),
+  apellidos: z.string().optional(),
+  email: z.union([z.literal(''), z.string().email()]).optional(),
   attendAt: z.string().datetime().nullable().optional(),
   selectedItemIds: z.array(z.string().uuid()).optional(),
 });
