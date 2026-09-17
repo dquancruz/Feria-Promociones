@@ -54,3 +54,14 @@ export function patchDraft(update: RegistrationDraftUpdate): Promise<Registratio
 export function confirmRegistration(): Promise<RegistrationConfirmation> {
   return request('/api/registrations/confirm', { method: 'POST' });
 }
+
+export async function resetSession(): Promise<void> {
+  const res = await fetch(`${API_URL}/api/registrations/session/reset`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    throw new Error(`Request to /api/registrations/session/reset failed with status ${res.status}`);
+  }
+}

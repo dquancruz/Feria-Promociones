@@ -2,7 +2,7 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import type { Pool } from 'pg';
 import { errorHandler } from './middleware/error-handler.js';
-import { registrationRateLimiter } from './middleware/rate-limit.js';
+import { createRegistrationRateLimiter } from './middleware/rate-limit.js';
 import { createCatalogRouter } from './routes/catalog.js';
 import { createRegistrationsRouter } from './routes/registrations.js';
 import { createSessionMiddleware } from './session.js';
@@ -28,7 +28,7 @@ export function createApp(pool: Pool): Express {
   app.use(createSessionMiddleware(pool));
 
   app.use('/api/catalog', createCatalogRouter(pool));
-  app.use('/api/registrations', registrationRateLimiter, createRegistrationsRouter(pool));
+  app.use('/api/registrations', createRegistrationRateLimiter(), createRegistrationsRouter(pool));
 
   app.use(errorHandler);
 

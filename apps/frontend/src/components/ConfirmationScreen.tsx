@@ -1,4 +1,6 @@
 import type { RegistrationConfirmation } from '@feria/shared';
+import { useState } from 'react';
+import { resetSession } from '../api/client';
 import { formatAmount } from '../utils/currency';
 
 interface ConfirmationScreenProps {
@@ -6,6 +8,23 @@ interface ConfirmationScreenProps {
 }
 
 export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  async function handleReset() {
+    setResetting(true);
+    setResetError(null);
+    try {
+      await resetSession();
+      // A full reload re-runs the app's initial load against the fresh session
+      // the backend just issued, instead of manually clearing every piece of state.
+      window.location.reload();
+    } catch {
+      setResetError('No se pudo iniciar un nuevo registro. Intenta de nuevo.');
+      setResetting(false);
+    }
+  }
+
   return (
     <section className="panel confirmation" aria-labelledby="confirmation-heading">
       <h2 id="confirmation-heading">¡Asistencia confirmada!</h2>
@@ -37,6 +56,15 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
           </div>
         </dl>
       </div>
+
+      <button type="button" className="secondary-button" onClick={() => void handleReset()} disabled={resetting}>
+        {resetting ? 'Preparando…' : 'Registrar otro cliente'}
+      </button>
+      {resetError && (
+        <p className="save-error" role="alert">
+          {resetError}
+        </p>
+      )}
     </section>
   );
 }
