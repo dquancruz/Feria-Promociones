@@ -20,4 +20,5 @@ COPY --from=build /repo/apps/backend/migrations ./migrations
 COPY --from=build /repo/node_modules ./node_modules
 ENV PORT=4000
 EXPOSE 4000
+USER node
 CMD ["node", "dist/index.js"]

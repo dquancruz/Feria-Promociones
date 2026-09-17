@@ -19,4 +19,5 @@ RUN npm install -g serve@14
 COPY --from=build /repo/apps/frontend/dist ./dist
 ENV PORT=4173
 EXPOSE 4173
+USER node
 CMD ["sh", "-c", "serve -s dist -l ${PORT}"]
