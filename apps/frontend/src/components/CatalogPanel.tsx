@@ -3,6 +3,7 @@ import type { FieldErrors } from '../api/client';
 import { formatCents } from '../utils/currency';
 import { fieldErrorMessage } from '../utils/fieldErrors';
 import type { PreviewTotals } from '../utils/discountPreview';
+import { productProgress, serviceProgress, type TierProgress } from '../utils/discountProgress';
 
 interface CatalogPanelProps {
   items: CatalogItem[];
@@ -15,6 +16,29 @@ interface CatalogPanelProps {
   onConfirm: () => void;
   submitting: boolean;
   catalogLoading: boolean;
+}
+
+function TierMeter({ progress }: { progress: TierProgress }) {
+  const fillPct = Math.min(100, (progress.count / progress.trackMax) * 100);
+
+  return (
+    <div className="tier-meter">
+      <div className="tier-meter-track" aria-hidden="true">
+        <div
+          className={`tier-meter-fill${progress.atMaxTier ? ' tier-meter-fill--max' : ''}`}
+          style={{ width: `${fillPct}%` }}
+        />
+        {progress.ticks.map((tick) => (
+          <span
+            key={tick}
+            className="tier-meter-tick"
+            style={{ left: `${Math.min(100, (tick / progress.trackMax) * 100)}%` }}
+          />
+        ))}
+      </div>
+      {progress.hint && <p className="tier-meter-hint">{progress.hint}</p>}
+    </div>
+  );
 }
 
 function ItemRow({
@@ -52,6 +76,8 @@ export function CatalogPanel({
   const services = items.filter((item) => item.type === 'service');
   const products = items.filter((item) => item.type === 'product');
   const selectionError = fieldErrorMessage(fieldErrors, 'selectedItemIds');
+  const serviceMeter = serviceProgress(preview);
+  const productMeter = productProgress(preview);
 
   return (
     <section className="panel" aria-labelledby="catalog-panel-heading">
@@ -69,11 +95,23 @@ export function CatalogPanel({
       </div>
 
       <div className="catalog-list" aria-live="polite" aria-busy={catalogLoading}>
-        {items.length === 0 && !catalogLoading && <p className="catalog-empty">No se encontraron resultados.</p>}
+        {items.length === 0 && !catalogLoading && (
+          <p className="catalog-empty">
+            No se encontraron resultados.{' '}
+            {search.trim() && (
+              <button type="button" className="link-button" onClick={() => onSearchChange('')}>
+                Limpiar búsqueda
+              </button>
+            )}
+          </p>
+        )}
 
         {services.length > 0 && (
           <div>
-            <h3>Servicios</h3>
+            <h3>
+              Servicios{serviceMeter.count > 0 && <span className="catalog-count"> ({serviceMeter.count})</span>}
+            </h3>
+            <TierMeter progress={serviceMeter} />
             <ul>
               {services.map((item) => (
                 <ItemRow key={item.id} item={item} checked={selectedItemIds.has(item.id)} onToggle={onToggle} />
@@ -84,7 +122,10 @@ export function CatalogPanel({
 
         {products.length > 0 && (
           <div>
-            <h3>Productos</h3>
+            <h3>
+              Productos{productMeter.count > 0 && <span className="catalog-count"> ({productMeter.count})</span>}
+            </h3>
+            <TierMeter progress={productMeter} />
             <ul>
               {products.map((item) => (
                 <ItemRow key={item.id} item={item} checked={selectedItemIds.has(item.id)} onToggle={onToggle} />
@@ -100,7 +141,7 @@ export function CatalogPanel({
         </p>
       )}
 
-      <footer className="discount-summary">
+      <footer className="discount-summary ticket">
         <div className="discount-summary-row">
           <div>
             <span className="discount-label">Descuento obtenido en Servicios</span>

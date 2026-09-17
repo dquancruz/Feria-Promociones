@@ -3,7 +3,10 @@
 //   Products: >=3 selected -> 3%; >=5 selected -> 5%.
 // Money is handled in integer cents throughout to avoid floating point drift.
 
-const SERVICE_SUM_THRESHOLD_CENTS = 150_000; // Q.1,500
+export const SERVICE_MIN_COUNT_FOR_DISCOUNT = 2;
+export const SERVICE_SUM_THRESHOLD_CENTS = 150_000; // Q.1,500
+export const PRODUCT_MIN_COUNT_FOR_3PCT = 3;
+export const PRODUCT_MIN_COUNT_FOR_5PCT = 5;
 
 export type DiscountPct = 0 | 3 | 5;
 
@@ -36,13 +39,13 @@ function applyDiscountPct(subtotalCents: number, pct: DiscountPct): number {
 }
 
 function serviceDiscountFor(services: DiscountLineInput[], subtotalCents: number): DiscountPct {
-  if (services.length < 2) return 0;
+  if (services.length < SERVICE_MIN_COUNT_FOR_DISCOUNT) return 0;
   return subtotalCents > SERVICE_SUM_THRESHOLD_CENTS ? 5 : 3;
 }
 
 function productDiscountFor(products: DiscountLineInput[]): DiscountPct {
-  if (products.length >= 5) return 5;
-  if (products.length >= 3) return 3;
+  if (products.length >= PRODUCT_MIN_COUNT_FOR_5PCT) return 5;
+  if (products.length >= PRODUCT_MIN_COUNT_FOR_3PCT) return 3;
   return 0;
 }
 
