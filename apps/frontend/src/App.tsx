@@ -105,7 +105,12 @@ function App() {
   const { debounced: debouncedSearch } = useDebouncedCallback((term: string) => {
     setCatalogLoading(true);
     fetchCatalog(term)
-      .then((res) => setVisibleItems(res.items))
+      .then((res) => {
+        setVisibleItems(res.items);
+        // Merged rather than replaced, so an item selected under an earlier search
+        // term is never dropped from the map once a later search excludes it.
+        setCatalogById((prev) => new Map([...prev, ...res.items.map((item) => [item.id, item] as const)]));
+      })
       .catch(() => {
         /* keep showing the previous results if the search request fails */
       })
@@ -200,6 +205,7 @@ function App() {
               <div className="furrow-divider" aria-hidden="true" />
               <CatalogPanel
                 items={visibleItems}
+                catalogById={catalogById}
                 selectedItemIds={selectedItemIds}
                 onToggle={handleToggleItem}
                 search={search}

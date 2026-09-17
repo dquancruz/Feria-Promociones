@@ -7,6 +7,7 @@ import { productProgress, serviceProgress, type TierProgress } from '../utils/di
 
 interface CatalogPanelProps {
   items: CatalogItem[];
+  catalogById: Map<string, CatalogItem>;
   selectedItemIds: Set<string>;
   onToggle: (id: string) => void;
   search: string;
@@ -61,8 +62,41 @@ function ItemRow({
   );
 }
 
+function SelectedItemsBlock({
+  items,
+  onRemove,
+}: {
+  items: CatalogItem[];
+  onRemove: (id: string) => void;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="selected-items">
+      <h3>Servicios y/o Productos seleccionados:</h3>
+      <ul>
+        {items.map((item) => (
+          <li key={item.id} className="selected-item">
+            <span className="selected-item-name">{item.name}</span>
+            <span className="catalog-item-price">{formatCents(item.priceCents)}</span>
+            <button
+              type="button"
+              className="selected-item-remove"
+              onClick={() => onRemove(item.id)}
+              aria-label={`Quitar ${item.name}`}
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function CatalogPanel({
   items,
+  catalogById,
   selectedItemIds,
   onToggle,
   search,
@@ -75,6 +109,9 @@ export function CatalogPanel({
 }: CatalogPanelProps) {
   const services = items.filter((item) => item.type === 'service');
   const products = items.filter((item) => item.type === 'product');
+  const selectedItems = Array.from(selectedItemIds)
+    .map((id) => catalogById.get(id))
+    .filter((item): item is CatalogItem => item !== undefined);
   const selectionError = fieldErrorMessage(fieldErrors, 'selectedItemIds');
   const serviceMeter = serviceProgress(preview);
   const productMeter = productProgress(preview);
@@ -93,6 +130,8 @@ export function CatalogPanel({
           placeholder="Buscar Servicios y Productos"
         />
       </div>
+
+      <SelectedItemsBlock items={selectedItems} onRemove={onToggle} />
 
       <div className="catalog-list" aria-live="polite" aria-busy={catalogLoading}>
         {items.length === 0 && !catalogLoading && (

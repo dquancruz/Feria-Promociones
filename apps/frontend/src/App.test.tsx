@@ -1,5 +1,5 @@
 import type { CatalogItem, RegistrationConfirmation, RegistrationResponse } from '@feria/shared';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -33,7 +33,9 @@ function installFetchMock(handlers: Handlers = {}) {
     const method = init?.method ?? 'GET';
 
     if (url.startsWith('/api/catalog')) {
-      return jsonResponse(200, { items: CATALOG });
+      const search = new URL(url, 'http://localhost').searchParams.get('search')?.toLowerCase() ?? '';
+      const items = search ? CATALOG.filter((item) => item.name.toLowerCase().includes(search)) : CATALOG;
+      return jsonResponse(200, { items });
     }
     if (url === '/api/registrations/draft' && method === 'GET') {
       return jsonResponse(200, DRAFT);
@@ -115,6 +117,22 @@ describe('App', () => {
 
     // Q1000 + Q600 = Q1600 > Q1,500, so two services cross into the 5% tier.
     await waitFor(() => expect(screen.getByText('5%')).toBeInTheDocument());
+  });
+
+  it('keeps a selected item visible in the selected-items block after a search excludes it', async () => {
+    const user = userEvent.setup();
+    installFetchMock();
+    render(<App />);
+
+    await user.click(await screen.findByRole('checkbox', { name: /Servicio 1/ }));
+
+    await user.type(screen.getByLabelText('Buscar Servicios y Productos'), 'Producto');
+
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: /Servicio 1/ })).not.toBeInTheDocument());
+
+    const selectedBlock = screen.getByText('Servicios y/o Productos seleccionados:').closest('div');
+    expect(selectedBlock).not.toBeNull();
+    expect(within(selectedBlock as HTMLElement).getByText('Servicio 1')).toBeInTheDocument();
   });
 
   it('sends a cleared field as an empty string in the autosave PATCH, instead of omitting it', async () => {
