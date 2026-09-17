@@ -156,6 +156,7 @@ export async function confirmDraft(
     if (!registration.apellidos.trim()) fieldErrors.apellidos = 'Apellidos son requeridos';
     if (!z.string().email().safeParse(registration.email).success) fieldErrors.email = 'Email inválido';
     if (!registration.attend_at) fieldErrors.attendAt = 'Fecha y hora son requeridas';
+    else if (registration.attend_at.getTime() < Date.now()) fieldErrors.attendAt = 'La fecha debe ser futura';
     if (currentItems.length === 0) {
       fieldErrors.selectedItemIds = 'Selecciona al menos un servicio o producto';
     }

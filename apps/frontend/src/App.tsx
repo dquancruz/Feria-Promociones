@@ -12,8 +12,6 @@ import { useDebouncedCallback } from './hooks/useDebouncedCallback';
 import { combineDateAndTime, splitIsoDateTime } from './utils/datetime';
 import { computePreview } from './utils/discountPreview';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 type Phase = 'loading' | 'form' | 'confirmed' | 'error';
 
 function App() {
@@ -75,13 +73,13 @@ function App() {
 
   const buildDraftPayload = useCallback((): RegistrationDraftUpdate => {
     const current = valuesRef.current;
-    const payload: RegistrationDraftUpdate = { selectedItemIds: Array.from(selectedItemIdsRef.current) };
-    if (current.nombre.trim()) payload.nombre = current.nombre.trim();
-    if (current.apellidos.trim()) payload.apellidos = current.apellidos.trim();
-    if (current.email.trim() && EMAIL_PATTERN.test(current.email.trim())) payload.email = current.email.trim();
-    const attendAt = combineDateAndTime(current.date, current.time);
-    if (attendAt) payload.attendAt = attendAt;
-    return payload;
+    return {
+      nombre: current.nombre.trim(),
+      apellidos: current.apellidos.trim(),
+      email: current.email.trim(),
+      attendAt: combineDateAndTime(current.date, current.time),
+      selectedItemIds: Array.from(selectedItemIdsRef.current),
+    };
   }, []);
 
   const { debounced: debouncedSave } = useDebouncedCallback(() => {

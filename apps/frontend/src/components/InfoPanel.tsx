@@ -1,4 +1,5 @@
 import type { FieldErrors } from '../api/client';
+import { todayIsoDate } from '../utils/datetime';
 import { fieldErrorMessage } from '../utils/fieldErrors';
 
 export interface InfoPanelValues {
@@ -84,6 +85,7 @@ export function InfoPanel({ values, onChange, fieldErrors }: InfoPanelProps) {
             id="attend-date"
             type="date"
             value={values.date}
+            min={todayIsoDate()}
             onChange={(e) => onChange('date', e.target.value)}
             aria-label="Fecha"
             aria-invalid={Boolean(attendAtError)}

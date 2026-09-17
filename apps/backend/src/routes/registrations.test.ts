@@ -143,6 +143,52 @@ describe('registrations draft/confirm flow', () => {
     expect(second.body).toEqual(first.body);
   });
 
+  it('persists a field cleared to an empty string, instead of ignoring the update', async () => {
+    const agent = request.agent(createApp(pool));
+    await agent.get('/api/registrations/draft');
+    await agent.patch('/api/registrations/draft').send({ nombre: 'Diego' });
+
+    await agent.patch('/api/registrations/draft').send({ nombre: '' });
+    const response = await agent.get('/api/registrations/draft');
+
+    expect(response.body.nombre).toBe('');
+  });
+
+  it('rejects confirm with the field error when a required field was cleared after being valid', async () => {
+    const agent = request.agent(createApp(pool));
+    await agent.get('/api/registrations/draft');
+    await agent.patch('/api/registrations/draft').send({
+      nombre: 'Ana',
+      apellidos: 'Lopez',
+      email: 'ana@example.com',
+      attendAt: '2026-10-01T15:00:00.000Z',
+      selectedItemIds: [serviceA],
+    });
+    await agent.patch('/api/registrations/draft').send({ nombre: '' });
+
+    const response = await agent.post('/api/registrations/confirm');
+
+    expect(response.status).toBe(400);
+    expect(response.body.fieldErrors).toMatchObject({ nombre: expect.any(String) });
+  });
+
+  it('rejects confirm when attendAt is in the past', async () => {
+    const agent = request.agent(createApp(pool));
+    await agent.get('/api/registrations/draft');
+    await agent.patch('/api/registrations/draft').send({
+      nombre: 'Ana',
+      apellidos: 'Lopez',
+      email: 'ana@example.com',
+      attendAt: '1990-01-01T15:00:00.000Z',
+      selectedItemIds: [serviceA],
+    });
+
+    const response = await agent.post('/api/registrations/confirm');
+
+    expect(response.status).toBe(400);
+    expect(response.body.fieldErrors).toMatchObject({ attendAt: expect.any(String) });
+  });
+
   it('ignores unknown or inactive catalog item ids sent by the client', async () => {
     const agent = request.agent(createApp(pool));
     await agent.get('/api/registrations/draft');
