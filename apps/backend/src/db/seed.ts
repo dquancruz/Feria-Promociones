@@ -6,9 +6,8 @@ interface SeedItem {
   priceCents: number;
 }
 
-// Prices match the wireframe's example figures where it gave them (docs/wireframe-notes.md);
-// the rest are invented, and a couple sit above Q.750 so two of them together can cross the
-// Q.1,500 services discount threshold in the demo.
+// Prices are invented for the demo; a couple of services sit above Q.750 on purpose so
+// two of them together can cross the Q.1,500 services discount threshold live.
 const SEED_ITEMS: SeedItem[] = [
   { type: 'service', name: 'Servicio 1 - Diagnóstico inicial', priceCents: 10_000 },
   { type: 'service', name: 'Servicio 2 - Soporte básico', priceCents: 5_030 },
