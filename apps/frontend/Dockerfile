@@ -9,6 +9,8 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN npm ci --workspace=@feria/frontend --workspace=@feria/shared --include-workspace-root
 COPY apps/frontend apps/frontend
 COPY packages/shared packages/shared
+# Build-time: baked into the bundle. Empty means the app's default (10 minutes).
+ARG VITE_IDLE_TIMEOUT_MIN
 RUN npm run build -w apps/frontend
 
 FROM node:20-alpine AS run

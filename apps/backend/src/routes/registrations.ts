@@ -10,7 +10,11 @@ export function createRegistrationsRouter(pool: Pool): Router {
   router.get(
     '/draft',
     asyncHandler(async (req, res) => {
-      const registration = await registrations.getOrCreateDraft(pool, req.sessionID);
+      const registration = await registrations.findRegistration(pool, req.sessionID);
+      if (!registration) {
+        res.json(registrations.EMPTY_DRAFT);
+        return;
+      }
       if (registration.status === 'confirmed') {
         res.json(await registrations.buildConfirmationResponse(pool, registration));
         return;
@@ -24,7 +28,14 @@ export function createRegistrationsRouter(pool: Pool): Router {
     '/draft',
     asyncHandler(async (req, res) => {
       const patch = registrationDraftUpdateSchema.parse(req.body);
-      const registration = await registrations.getOrCreateDraft(pool, req.sessionID);
+      let registration = await registrations.findRegistration(pool, req.sessionID);
+      if (!registration) {
+        if (!registrations.patchHasData(patch)) {
+          res.json({ ...registrations.EMPTY_DRAFT, discountPreview: { serviceDiscountPct: 0, productDiscountPct: 0 } });
+          return;
+        }
+        registration = await registrations.getOrCreateDraft(pool, req.sessionID);
+      }
       if (registration.status === 'confirmed') {
         res.json(await registrations.buildConfirmationResponse(pool, registration));
         return;

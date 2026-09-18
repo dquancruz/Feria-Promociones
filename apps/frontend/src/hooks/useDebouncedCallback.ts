@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 export function useDebouncedCallback<Args extends unknown[]>(
   callback: (...args: Args) => void,
   delayMs: number,
-): { debounced: (...args: Args) => void; flush: () => void } {
+): { debounced: (...args: Args) => void; flush: () => void; cancel: () => void } {
   const callbackRef = useRef(callback);
   callbackRef.current = callback;
 
@@ -31,6 +31,13 @@ export function useDebouncedCallback<Args extends unknown[]>(
     }
   }, []);
 
+  /** Drops any pending call without running it. */
+  const cancel = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    pendingArgsRef.current = null;
+  }, []);
+
   const debounced = useCallback(
     (...args: Args) => {
       pendingArgsRef.current = args;
@@ -43,5 +50,5 @@ export function useDebouncedCallback<Args extends unknown[]>(
     [delayMs, flush],
   );
 
-  return { debounced, flush };
+  return { debounced, flush, cancel };
 }

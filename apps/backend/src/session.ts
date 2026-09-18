@@ -30,5 +30,7 @@ export function createSessionMiddleware(pool: Pool): ReturnType<typeof session> 
 declare module 'express-session' {
   interface SessionData {
     isAdmin?: boolean;
+    // Epoch milliseconds of the last admin request; drives the idle timeout.
+    adminLastSeen?: number;
   }
 }

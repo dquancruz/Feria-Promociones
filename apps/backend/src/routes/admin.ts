@@ -50,11 +50,28 @@ function keyMatches(provided: string, expected: string): boolean {
   return timingSafeEqual(digest(provided), digest(expected));
 }
 
+// An admin browser session ends after this long without any admin request. Each request
+// pushes the deadline out again, so an admin who is working is never logged out.
+export const ADMIN_IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
+type AdminAccess = 'session' | 'key' | 'expired' | 'none';
+
 // Browser sessions (after POST /login) or, for scripts, the x-admin-key header.
-function hasAdminAccess(req: Request, adminKey: string): boolean {
-  if (req.session.isAdmin === true) return true;
+function checkAdminAccess(req: Request, adminKey: string): AdminAccess {
   const header = req.header('x-admin-key');
-  return header !== undefined && keyMatches(header, adminKey);
+  if (header !== undefined && keyMatches(header, adminKey)) return 'key';
+
+  if (req.session.isAdmin !== true) return 'none';
+
+  const now = Date.now();
+  if (now - (req.session.adminLastSeen ?? 0) > ADMIN_IDLE_TIMEOUT_MS) {
+    // Drop only the admin flag: the rest of the session is the visitor's own draft.
+    delete req.session.isAdmin;
+    delete req.session.adminLastSeen;
+    return 'expired';
+  }
+  req.session.adminLastSeen = now;
+  return 'session';
 }
 
 function destroySession(req: Request): Promise<void> {
@@ -103,6 +120,7 @@ export function createAdminRouter(pool: Pool, options: AdminRouterOptions = {}):
       // before logging in (session fixation) is worthless afterwards.
       await regenerateSession(req);
       req.session.isAdmin = true;
+      req.session.adminLastSeen = Date.now();
       res.json({ isAdmin: true });
     }),
   );
@@ -117,11 +135,17 @@ export function createAdminRouter(pool: Pool, options: AdminRouterOptions = {}):
   );
 
   router.get('/me', (req, res) => {
-    res.json({ isAdmin: hasAdminAccess(req, adminKey) });
+    const access = checkAdminAccess(req, adminKey);
+    res.json({ isAdmin: access === 'session' || access === 'key' });
   });
 
   const requireAdmin: RequestHandler = (req, res, next) => {
-    if (!hasAdminAccess(req, adminKey)) {
+    const access = checkAdminAccess(req, adminKey);
+    if (access === 'expired') {
+      res.status(401).json({ error: 'session_expired', message: 'Tu sesión de administrador expiró.' });
+      return;
+    }
+    if (access === 'none') {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
