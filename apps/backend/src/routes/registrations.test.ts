@@ -125,6 +125,40 @@ describe('registrations draft/confirm flow', () => {
     expect(response.body.confirmationId).toEqual(expect.any(String));
   });
 
+  it('describes the visit, the chosen items and the savings in the confirmation', async () => {
+    const agent = request.agent(createApp(pool));
+    await agent.patch('/api/registrations/draft').send({
+      nombre: 'Ana',
+      apellidos: 'Lopez',
+      email: 'ana@example.com',
+      attendAt: testAttendAt('10:30'),
+      selectedItemIds: [serviceA, serviceB, productA, productB, productC],
+    });
+
+    const response = await agent.post('/api/registrations/confirm');
+
+    expect(response.body).toMatchObject({
+      nombre: 'Ana',
+      apellidos: 'Lopez',
+      attendAt: testAttendAt('10:30'),
+      servicesSubtotal: 1600,
+      productsSubtotal: 150,
+      subtotal: 1750,
+      servicesSavings: 80,
+      productsSavings: 4.5,
+      savings: 84.5,
+    });
+    expect(response.body.items).toEqual([
+      { id: serviceA, name: 'Servicio A', type: 'service', priceCents: 80000 },
+      { id: serviceB, name: 'Servicio B', type: 'service', priceCents: 80000 },
+      { id: productA, name: 'Producto A', type: 'product', priceCents: 5000 },
+      { id: productB, name: 'Producto B', type: 'product', priceCents: 5000 },
+      { id: productC, name: 'Producto C', type: 'product', priceCents: 5000 },
+    ]);
+    // Reading the confirmed registration back later returns the same detail.
+    expect((await agent.get('/api/registrations/draft')).body).toEqual(response.body);
+  });
+
   it('is idempotent on a repeat confirm, returning 409 with the existing confirmation', async () => {
     const agent = request.agent(createApp(pool));
     await agent.get('/api/registrations/draft');

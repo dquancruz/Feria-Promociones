@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { catalogItemTypeSchema } from './catalog.js';
 
 export const registrationStatusSchema = z.enum(['draft', 'confirmed']);
 export type RegistrationStatus = z.infer<typeof registrationStatusSchema>;
@@ -55,6 +56,15 @@ export const registrationDraftSchema = z.object({
 export type RegistrationDraft = z.infer<typeof registrationDraftSchema>;
 
 // POST /api/registrations/confirm response, and what GET returns once confirmed.
+export const confirmedItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  type: catalogItemTypeSchema,
+  priceCents: z.number().int().nonnegative(),
+});
+export type ConfirmedItem = z.infer<typeof confirmedItemSchema>;
+
+// Money fields are in quetzales (not cents), like the totals that were already here.
 export const registrationConfirmationSchema = z.object({
   status: z.literal('confirmed'),
   confirmationId: z.string().uuid(),
@@ -63,6 +73,17 @@ export const registrationConfirmationSchema = z.object({
   servicesTotal: z.number(),
   productsTotal: z.number(),
   grandTotal: z.number(),
+  nombre: z.string(),
+  apellidos: z.string(),
+  attendAt: z.string().datetime().nullable(),
+  items: z.array(confirmedItemSchema),
+  // Before discounts, per category and overall; savings = subtotal - total.
+  servicesSubtotal: z.number(),
+  productsSubtotal: z.number(),
+  subtotal: z.number(),
+  servicesSavings: z.number(),
+  productsSavings: z.number(),
+  savings: z.number(),
 });
 export type RegistrationConfirmation = z.infer<typeof registrationConfirmationSchema>;
 

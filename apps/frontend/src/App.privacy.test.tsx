@@ -1,61 +1,16 @@
-import type { CatalogItem, RegistrationConfirmation, RegistrationResponse } from '@feria/shared';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { CONFIRMED, EMPTY_DRAFT, installFetchMock } from './test/mocks';
 import { reloadPage } from './utils/navigation';
 
 vi.mock('./utils/navigation', () => ({ reloadPage: vi.fn() }));
 
-const CATALOG: CatalogItem[] = [
-  { id: 's1', type: 'service', name: 'Servicio 1', priceCents: 100_000, active: true },
-];
+const ANA_DRAFT = { ...EMPTY_DRAFT, nombre: 'Ana', email: 'ana@example.com' };
 
-const EMPTY_DRAFT: RegistrationResponse = {
-  status: 'draft',
-  nombre: '',
-  apellidos: '',
-  email: '',
-  attendAt: null,
-  selectedItemIds: [],
-};
-
-const ANA_DRAFT: RegistrationResponse = { ...EMPTY_DRAFT, nombre: 'Ana', email: 'ana@example.com' };
-
-const CONFIRMED: RegistrationConfirmation = {
-  status: 'confirmed',
-  confirmationId: 'aaaaaaaa-0000-0000-0000-000000000000',
-  serviceDiscountPct: 0,
-  productDiscountPct: 0,
-  servicesTotal: 0,
-  productsTotal: 0,
-  grandTotal: 0,
-};
-
-function jsonResponse(status: number, body: unknown) {
-  return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
-}
-
-function installFetchMock(draft: RegistrationResponse) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const method = init?.method ?? 'GET';
-
-    if (url.startsWith('/api/catalog')) return jsonResponse(200, { items: CATALOG });
-    if (url === '/api/registrations/draft') return jsonResponse(200, draft);
-    if (url === '/api/registrations/session/reset' && method === 'POST') return jsonResponse(204, null);
-    throw new Error(`Unhandled request: ${method} ${url}`);
-  });
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-}
-
-function callsTo(fetchMock: ReturnType<typeof installFetchMock>, method: string, url: string) {
-  return fetchMock.mock.calls.filter(([input, init]) => {
-    const target = typeof input === 'string' ? input : input.toString();
-    return target === url && (init?.method ?? 'GET') === method;
-  });
-}
+const callsTo = (fetchMock: ReturnType<typeof installFetchMock>, method: string, url: string) =>
+  fetchMock.callsTo(method, url);
 
 beforeEach(() => {
   vi.mocked(reloadPage).mockClear();
@@ -71,7 +26,7 @@ describe('shared-device privacy', () => {
   describe('restored draft', () => {
     it('lets the next person discard someone else\'s draft from the restore notice', async () => {
       const user = userEvent.setup();
-      const fetchMock = installFetchMock(ANA_DRAFT);
+      const fetchMock = installFetchMock({ draft: ANA_DRAFT });
       render(<App />);
 
       await user.click(await screen.findByRole('button', { name: 'No soy Ana, empezar de nuevo' }));
@@ -81,7 +36,7 @@ describe('shared-device privacy', () => {
     });
 
     it('offers a generic wording when the restored draft has no name yet', async () => {
-      installFetchMock({ ...EMPTY_DRAFT, selectedItemIds: ['s1'] });
+      installFetchMock({ draft: { ...EMPTY_DRAFT, selectedItemIds: ['s1'] } });
       render(<App />);
 
       expect(await screen.findByRole('button', { name: 'No soy yo, empezar de nuevo' })).toBeInTheDocument();
@@ -90,17 +45,17 @@ describe('shared-device privacy', () => {
 
   describe('"Borrar mis datos" action', () => {
     it('is not shown on an untouched form', async () => {
-      installFetchMock(EMPTY_DRAFT);
+      installFetchMock({ draft: EMPTY_DRAFT });
       render(<App />);
 
-      await screen.findByRole('heading', { name: '1. Ingrese su información' });
+      await screen.findByRole('heading', { name: 'Tus datos' });
 
       expect(screen.queryByRole('button', { name: 'Borrar mis datos y empezar de nuevo' })).not.toBeInTheDocument();
     });
 
     it('resets the session and reloads when used', async () => {
       const user = userEvent.setup();
-      const fetchMock = installFetchMock(ANA_DRAFT);
+      const fetchMock = installFetchMock({ draft: ANA_DRAFT });
       render(<App />);
 
       await user.click(await screen.findByRole('button', { name: 'Borrar mis datos y empezar de nuevo' }));
@@ -111,7 +66,7 @@ describe('shared-device privacy', () => {
 
     it('never lets a pending autosave re-create the data it just erased', async () => {
       const user = userEvent.setup();
-      const fetchMock = installFetchMock(EMPTY_DRAFT);
+      const fetchMock = installFetchMock({ draft: EMPTY_DRAFT });
       render(<App />);
 
       await user.type(await screen.findByLabelText('Nombre'), 'Ana');
@@ -133,7 +88,7 @@ describe('shared-device privacy', () => {
     const advance = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
 
     it('asks "¿Sigues ahí?" after the configured time with personal data on the form', async () => {
-      installFetchMock(ANA_DRAFT);
+      installFetchMock({ draft: ANA_DRAFT });
       render(<App />);
       await screen.findByLabelText('Nombre');
 
@@ -146,7 +101,7 @@ describe('shared-device privacy', () => {
 
     it('counts down visibly, and keeps the session when the person answers', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-      const fetchMock = installFetchMock(ANA_DRAFT);
+      const fetchMock = installFetchMock({ draft: ANA_DRAFT });
       render(<App />);
       await screen.findByLabelText('Nombre');
       await advance(60_000);
@@ -165,7 +120,7 @@ describe('shared-device privacy', () => {
     });
 
     it('resets the session when nobody answers within 60 seconds', async () => {
-      const fetchMock = installFetchMock(ANA_DRAFT);
+      const fetchMock = installFetchMock({ draft: ANA_DRAFT });
       render(<App />);
       await screen.findByLabelText('Nombre');
       await advance(60_000);
@@ -179,7 +134,7 @@ describe('shared-device privacy', () => {
 
     it('treats any interaction as activity and postpones the prompt', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-      installFetchMock(ANA_DRAFT);
+      installFetchMock({ draft: ANA_DRAFT });
       render(<App />);
       const nombre = await screen.findByLabelText('Nombre');
 
@@ -191,7 +146,7 @@ describe('shared-device privacy', () => {
     });
 
     it('does not bother someone who has not entered any personal data', async () => {
-      installFetchMock(EMPTY_DRAFT);
+      installFetchMock({ draft: EMPTY_DRAFT });
       render(<App />);
       await screen.findByLabelText('Nombre');
 
@@ -209,7 +164,7 @@ describe('shared-device privacy', () => {
     const advance = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
 
     it('shows how long is left before it resets itself', async () => {
-      installFetchMock(CONFIRMED);
+      installFetchMock({ draft: CONFIRMED });
       render(<App />);
 
       expect(await screen.findByRole('timer')).toHaveTextContent('2:00');
@@ -218,7 +173,7 @@ describe('shared-device privacy', () => {
     });
 
     it('resets the session by itself after two minutes', async () => {
-      const fetchMock = installFetchMock(CONFIRMED);
+      const fetchMock = installFetchMock({ draft: CONFIRMED });
       render(<App />);
       await screen.findByRole('timer');
 
