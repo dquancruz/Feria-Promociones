@@ -57,9 +57,8 @@ export function createAdminRouter(pool: Pool): Router | null {
 
   router.get(
     '/registrations.csv',
-    asyncHandler(async (req, res) => {
-      const { limit, offset } = parsePagination(req.query);
-      const { registrations } = await admin.listConfirmedRegistrations(pool, { limit, offset });
+    asyncHandler(async (_req, res) => {
+      const registrations = await admin.listAllConfirmedRegistrations(pool);
       const csv = toCsv(
         CSV_HEADERS,
         registrations.map((registration) => [

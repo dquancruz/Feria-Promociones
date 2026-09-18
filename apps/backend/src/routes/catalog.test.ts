@@ -41,4 +41,43 @@ describe('GET /api/catalog', () => {
     expect(response.body.items).toHaveLength(1);
     expect(response.body.items[0].name).toBe('Producto Especial');
   });
+
+  it('matches regardless of accents, in both directions', async () => {
+    await pool.query(
+      `INSERT INTO catalog_items (type, name, price_cents) VALUES
+       ('service', 'Diagnóstico de suelos', 9000),
+       ('service', 'Analisis rapido', 4000)`,
+    );
+
+    const names = async (search: string) => {
+      const response = await request(createApp(pool)).get('/api/catalog').query({ search });
+      return response.body.items.map((item: { name: string }) => item.name);
+    };
+
+    expect(await names('diagnostico')).toEqual(['Diagnóstico de suelos']);
+    expect(await names('DIAGNÓSTICO')).toEqual(['Diagnóstico de suelos']);
+    expect(await names('análisis')).toEqual(['Analisis rapido']);
+  });
+
+  it('treats LIKE wildcards in the search as literal characters', async () => {
+    await pool.query(
+      `INSERT INTO catalog_items (type, name, price_cents) VALUES ('product', 'Descuento 50% extra', 1000)`,
+    );
+
+    const names = async (search: string) => {
+      const response = await request(createApp(pool)).get('/api/catalog').query({ search });
+      return response.body.items.map((item: { name: string }) => item.name);
+    };
+
+    expect(await names('%')).toEqual(['Descuento 50% extra']);
+    expect(await names('50%')).toEqual(['Descuento 50% extra']);
+    expect(await names('_')).toEqual([]);
+    expect(await names('\\')).toEqual([]);
+  });
+
+  it('returns the whole catalog for a blank search', async () => {
+    const response = await request(createApp(pool)).get('/api/catalog').query({ search: '   ' });
+
+    expect(response.body.items).toHaveLength(2);
+  });
 });

@@ -3,13 +3,36 @@ import { z } from 'zod';
 export const registrationStatusSchema = z.enum(['draft', 'confirmed']);
 export type RegistrationStatus = z.infer<typeof registrationStatusSchema>;
 
+export const NAME_MAX_LENGTH = 100;
+export const EMAIL_MAX_LENGTH = 254;
+
 // PATCH /api/registrations/draft request body: any subset of the draft fields.
+// Drafts are autosaved while the person is still typing, so this only bounds
+// shape and length. Email format is checked when the registration is confirmed.
 export const registrationDraftUpdateSchema = z.object({
-  nombre: z.string().optional(),
-  apellidos: z.string().optional(),
-  email: z.union([z.literal(''), z.string().email()]).optional(),
-  attendAt: z.string().datetime().nullable().optional(),
-  selectedItemIds: z.array(z.string().uuid()).optional(),
+  nombre: z
+    .string({ invalid_type_error: 'Nombre inválido' })
+    .max(NAME_MAX_LENGTH, `El nombre no puede superar ${NAME_MAX_LENGTH} caracteres`)
+    .optional(),
+  apellidos: z
+    .string({ invalid_type_error: 'Apellidos inválidos' })
+    .max(NAME_MAX_LENGTH, `Los apellidos no pueden superar ${NAME_MAX_LENGTH} caracteres`)
+    .optional(),
+  email: z
+    .string({ invalid_type_error: 'Email inválido' })
+    .trim()
+    .max(EMAIL_MAX_LENGTH, `El email no puede superar ${EMAIL_MAX_LENGTH} caracteres`)
+    .optional(),
+  attendAt: z
+    .string({ invalid_type_error: 'Fecha y hora inválidas' })
+    .datetime({ message: 'Fecha y hora inválidas' })
+    .nullable()
+    .optional(),
+  selectedItemIds: z
+    .array(z.string({ invalid_type_error: 'Selección inválida' }).uuid('Selección inválida'), {
+      invalid_type_error: 'Selección inválida',
+    })
+    .optional(),
 });
 export type RegistrationDraftUpdate = z.infer<typeof registrationDraftUpdateSchema>;
 

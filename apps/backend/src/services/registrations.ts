@@ -61,6 +61,19 @@ export async function updateDraft(
   try {
     await client.query('BEGIN');
 
+    // Autosave and the confirm click can overlap for the same session. The row lock
+    // serializes them, so two DELETE + INSERT cycles never interleave.
+    const {
+      rows: [current],
+    } = await client.query<RegistrationRow>('SELECT * FROM registrations WHERE id = $1 FOR UPDATE', [
+      registrationId,
+    ]);
+    if (current.status === 'confirmed') {
+      // A confirm won the race: leave the confirmed data as it is.
+      await client.query('COMMIT');
+      return current;
+    }
+
     const setFields: string[] = [];
     const values: unknown[] = [];
     if (patch.nombre !== undefined) {
@@ -89,16 +102,12 @@ export async function updateDraft(
       await client.query('DELETE FROM registration_items WHERE registration_id = $1', [registrationId]);
 
       if (patch.selectedItemIds.length > 0) {
-        const { rows: catalogRows } = await client.query<{ id: string; price_cents: number }>(
-          'SELECT id, price_cents FROM catalog_items WHERE id = ANY($1::uuid[]) AND active = true',
-          [patch.selectedItemIds],
+        await client.query(
+          `INSERT INTO registration_items (registration_id, catalog_item_id, price_cents_snapshot)
+           SELECT $1, id, price_cents FROM catalog_items WHERE id = ANY($2::uuid[]) AND active = true
+           ON CONFLICT DO NOTHING`,
+          [registrationId, patch.selectedItemIds],
         );
-        for (const row of catalogRows) {
-          await client.query(
-            'INSERT INTO registration_items (registration_id, catalog_item_id, price_cents_snapshot) VALUES ($1, $2, $3)',
-            [registrationId, row.id, row.price_cents],
-          );
-        }
       }
     }
 
@@ -137,40 +146,68 @@ export async function confirmDraft(
       return { registration, alreadyConfirmed: true };
     }
 
-    const { rows: selectedIds } = await client.query<{ catalog_item_id: string }>(
-      'SELECT catalog_item_id FROM registration_items WHERE registration_id = $1',
+    // Items deactivated since they were picked no longer count. Removing them here (rather
+    // than only ignoring them in the calculation) keeps the stored discount, the
+    // confirmation screen and the admin view describing the same selection.
+    await client.query(
+      `DELETE FROM registration_items ri
+       WHERE ri.registration_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM catalog_items ci WHERE ci.id = ri.catalog_item_id AND ci.active = true
+         )`,
       [registrationId],
     );
-    // Re-read current, active catalog prices rather than trusting whatever was snapshotted
+
+    // Re-read current catalog prices rather than trusting whatever was snapshotted
     // during earlier drafting — this is the authoritative recalculation the client can't tamper with.
     const { rows: currentItems } = await client.query<{
       id: string;
       type: 'service' | 'product';
       price_cents: number;
-    }>('SELECT id, type, price_cents FROM catalog_items WHERE id = ANY($1::uuid[]) AND active = true', [
-      selectedIds.map((row) => row.catalog_item_id),
-    ]);
+    }>(
+      `SELECT ci.id, ci.type, ci.price_cents
+       FROM registration_items ri
+       JOIN catalog_items ci ON ci.id = ri.catalog_item_id
+       WHERE ri.registration_id = $1`,
+      [registrationId],
+    );
 
     const fieldErrors: Record<string, string> = {};
     if (!registration.nombre.trim()) fieldErrors.nombre = 'Nombre es requerido';
     if (!registration.apellidos.trim()) fieldErrors.apellidos = 'Apellidos son requeridos';
-    if (!z.string().email().safeParse(registration.email).success) fieldErrors.email = 'Email inválido';
+    const emailIsValid = z.string().email().safeParse(registration.email).success;
+    if (!emailIsValid) fieldErrors.email = 'Email inválido';
     if (!registration.attend_at) fieldErrors.attendAt = 'Fecha y hora son requeridas';
     else if (registration.attend_at.getTime() < Date.now()) fieldErrors.attendAt = 'La fecha debe ser futura';
     if (currentItems.length === 0) {
       fieldErrors.selectedItemIds = 'Selecciona al menos un servicio o producto';
     }
 
+    if (emailIsValid) {
+      // Deliberately a lock plus a lookup instead of a unique index: a unique index would
+      // fail its migration if the database already holds duplicates. The advisory lock makes
+      // two simultaneous confirmations for the same email queue up, so the second one sees
+      // the first one's committed row.
+      await client.query('SELECT pg_advisory_xact_lock(hashtext(lower($1::text)))', [registration.email]);
+      const { rowCount } = await client.query(
+        `SELECT 1 FROM registrations
+         WHERE status = 'confirmed' AND lower(email) = lower($1::text) AND id <> $2`,
+        [registration.email, registrationId],
+      );
+      if (rowCount) fieldErrors.email = 'Este email ya tiene una asistencia confirmada.';
+    }
+
     if (Object.keys(fieldErrors).length > 0) {
       throw new ValidationError(fieldErrors);
     }
 
-    for (const item of currentItems) {
-      await client.query(
-        'UPDATE registration_items SET price_cents_snapshot = $1 WHERE registration_id = $2 AND catalog_item_id = $3',
-        [item.price_cents, registrationId, item.id],
-      );
-    }
+    await client.query(
+      `UPDATE registration_items ri
+       SET price_cents_snapshot = ci.price_cents
+       FROM catalog_items ci
+       WHERE ri.registration_id = $1 AND ci.id = ri.catalog_item_id`,
+      [registrationId],
+    );
 
     const totals = calculateDiscounts({
       selectedServices: currentItems
@@ -225,8 +262,10 @@ export async function buildConfirmationResponse(
   return {
     status: 'confirmed',
     confirmationId: registration.id,
-    serviceDiscountPct: totals.serviceDiscountPct,
-    productDiscountPct: totals.productDiscountPct,
+    // The percentages recorded at confirmation are the source of truth; the totals are
+    // derived from the same (already cleaned) item list.
+    serviceDiscountPct: Number(registration.service_discount_pct),
+    productDiscountPct: Number(registration.product_discount_pct),
     servicesTotal: centsToQuetzales(totals.servicesTotalCents),
     productsTotal: centsToQuetzales(totals.productsTotalCents),
     grandTotal: centsToQuetzales(totals.grandTotalCents),

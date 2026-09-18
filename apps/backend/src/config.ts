@@ -14,13 +14,18 @@ const envSchema = z.object({
   // Optional in every environment: the admin router simply doesn't mount without it.
   ADMIN_API_KEY: z.string().min(1).optional(),
   PORT: z.string().optional(),
+  // How many reverse proxies sit in front of the backend (only applied in production).
+  TRUST_PROXY_HOPS: z
+    .string()
+    .regex(/^\d+$/, 'must be a non-negative integer')
+    .optional(),
 });
 
 const result = envSchema.safeParse(process.env);
 
 if (!result.success) {
-  const missing = result.error.issues.map((issue) => issue.path.join('.'));
-  throw new Error(`Missing required environment variables in production: ${missing.join(', ')}`);
+  const invalid = result.error.issues.map((issue) => issue.path.join('.'));
+  throw new Error(`Missing or invalid environment variables: ${invalid.join(', ')}`);
 }
 
 export const config = {
@@ -30,4 +35,5 @@ export const config = {
   sessionSecret: result.data.SESSION_SECRET ?? 'dev-secret',
   corsOrigin: result.data.CORS_ORIGIN,
   adminApiKey: result.data.ADMIN_API_KEY,
+  trustProxyHops: Number(result.data.TRUST_PROXY_HOPS ?? 1),
 };

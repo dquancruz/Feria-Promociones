@@ -20,6 +20,21 @@ describe('config', () => {
     await expect(import('./config.js')).rejects.toThrow('SESSION_SECRET');
   });
 
+  it('trusts one proxy hop by default and lets TRUST_PROXY_HOPS override it', async () => {
+    delete process.env.TRUST_PROXY_HOPS;
+    expect((await import('./config.js')).config.trustProxyHops).toBe(1);
+
+    vi.resetModules();
+    process.env.TRUST_PROXY_HOPS = '2';
+    expect((await import('./config.js')).config.trustProxyHops).toBe(2);
+  });
+
+  it('rejects a TRUST_PROXY_HOPS that is not a number', async () => {
+    process.env.TRUST_PROXY_HOPS = 'many';
+
+    await expect(import('./config.js')).rejects.toThrow('TRUST_PROXY_HOPS');
+  });
+
   it('falls back to development defaults when nothing is set outside production', async () => {
     process.env.NODE_ENV = 'development';
     delete process.env.DATABASE_URL;
