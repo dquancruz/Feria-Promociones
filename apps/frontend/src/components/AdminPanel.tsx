@@ -107,7 +107,7 @@ export function AdminPanel() {
                       </td>
                       <td>{registration.email}</td>
                       <td>{registration.attendAt ? new Date(registration.attendAt).toLocaleString('es-GT') : '—'}</td>
-                      <td>{registration.items.join(', ')}</td>
+                      <td>{registration.items.map((item) => item.name).join(', ')}</td>
                       <td>{registration.serviceDiscountPct}%</td>
                       <td>{registration.productDiscountPct}%</td>
                       <td>{formatAmount(registration.grandTotal)}</td>

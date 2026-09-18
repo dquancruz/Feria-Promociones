@@ -26,3 +26,9 @@ export function createSessionMiddleware(pool: Pool): ReturnType<typeof session> 
 
   return session(options);
 }
+
+declare module 'express-session' {
+  interface SessionData {
+    isAdmin?: boolean;
+  }
+}

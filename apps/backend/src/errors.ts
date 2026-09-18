@@ -7,3 +7,10 @@ export class ValidationError extends Error {
     this.fieldErrors = fieldErrors;
   }
 }
+
+export class RegistrationClosedError extends Error {
+  constructor() {
+    super('Registration is closed');
+    this.name = 'RegistrationClosedError';
+  }
+}
