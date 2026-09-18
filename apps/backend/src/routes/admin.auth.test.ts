@@ -92,6 +92,83 @@ describe('admin authentication', () => {
     expect((await request(app).get('/api/admin/me').set('Cookie', adminCookie)).body).toEqual({ isAdmin: false });
   });
 
+  describe('idle timeout', () => {
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+    // These tests look sessions up by their admin flag, so leftovers from other tests must go.
+    beforeEach(async () => {
+      await pool.query('DELETE FROM session');
+    });
+
+    async function setLastSeen(msAgo: number) {
+      await pool.query(
+        `UPDATE session
+         SET sess = jsonb_set(sess::jsonb, '{adminLastSeen}', to_jsonb($1::bigint))::json
+         WHERE sess::jsonb->>'isAdmin' = 'true'`,
+        [Date.now() - msAgo],
+      );
+    }
+
+    async function loggedInAgent() {
+      const agent = request.agent(createApp(pool));
+      await agent.post('/api/admin/login').send({ key: ADMIN_KEY });
+      return agent;
+    }
+
+    it('answers 401 session_expired after two hours without admin activity', async () => {
+      const agent = await loggedInAgent();
+      await setLastSeen(TWO_HOURS_MS + 60_000);
+
+      const response = await agent.get('/api/admin/registrations');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: 'session_expired', message: 'Tu sesión de administrador expiró.' });
+    });
+
+    it('stays logged out afterwards instead of silently coming back', async () => {
+      const agent = await loggedInAgent();
+      await setLastSeen(TWO_HOURS_MS + 60_000);
+      await agent.get('/api/admin/registrations');
+
+      expect((await agent.get('/api/admin/me')).body).toEqual({ isAdmin: false });
+      const again = await agent.get('/api/admin/registrations');
+      expect(again.status).toBe(401);
+      expect(again.body.error).toBe('unauthorized');
+    });
+
+    it('reports an expired session as not logged in on /me', async () => {
+      const agent = await loggedInAgent();
+      await setLastSeen(TWO_HOURS_MS + 60_000);
+
+      expect((await agent.get('/api/admin/me')).body).toEqual({ isAdmin: false });
+    });
+
+    it('keeps a session that was active within the last two hours', async () => {
+      const agent = await loggedInAgent();
+      await setLastSeen(TWO_HOURS_MS - 5 * 60_000);
+
+      expect((await agent.get('/api/admin/registrations')).status).toBe(200);
+    });
+
+    it('pushes the deadline out with every request, so an active admin is never cut off', async () => {
+      const agent = await loggedInAgent();
+      await setLastSeen(TWO_HOURS_MS - 5 * 60_000);
+      await agent.get('/api/admin/registrations');
+
+      const { rows } = await pool.query<{ last_seen: string }>(
+        `SELECT sess::jsonb->>'adminLastSeen' AS last_seen FROM session WHERE sess::jsonb->>'isAdmin' = 'true'`,
+      );
+
+      expect(Date.now() - Number(rows[0].last_seen)).toBeLessThan(10_000);
+    });
+
+    it('does not apply to scripts that send the x-admin-key header', async () => {
+      const response = await request(createApp(pool)).get('/api/admin/registrations').set('x-admin-key', ADMIN_KEY);
+
+      expect(response.status).toBe(200);
+    });
+  });
+
   it('still accepts the x-admin-key header for scripts', async () => {
     const app = createApp(pool);
 

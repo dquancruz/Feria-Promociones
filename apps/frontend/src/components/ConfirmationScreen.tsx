@@ -1,7 +1,12 @@
 import type { RegistrationConfirmation } from '@feria/shared';
 import { useState } from 'react';
 import { resetSession } from '../api/client';
+import { formatCountdown, useCountdown } from '../hooks/useCountdown';
 import { formatAmount } from '../utils/currency';
+import { reloadPage } from '../utils/navigation';
+
+// The next person at a shared tablet shouldn't see this one's confirmation for long.
+const AUTO_RESET_SECONDS = 120;
 
 interface ConfirmationScreenProps {
   confirmation: RegistrationConfirmation;
@@ -18,12 +23,14 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
       await resetSession();
       // A full reload re-runs the app's initial load against the fresh session
       // the backend just issued, instead of manually clearing every piece of state.
-      window.location.reload();
+      reloadPage();
     } catch {
       setResetError('No se pudo iniciar un nuevo registro. Intenta de nuevo.');
       setResetting(false);
     }
   }
+
+  const secondsLeft = useCountdown(!resetting && !resetError, AUTO_RESET_SECONDS, () => void handleReset());
 
   return (
     <section className="panel confirmation" aria-labelledby="confirmation-heading">
@@ -60,6 +67,9 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
       <button type="button" className="secondary-button" onClick={() => void handleReset()} disabled={resetting}>
         {resetting ? 'Preparando…' : 'Registrar otro cliente'}
       </button>
+      <p className="countdown-note" role="timer">
+        Por tu privacidad, esta pantalla se reiniciará en {formatCountdown(secondsLeft)}.
+      </p>
       {resetError && (
         <p className="save-error" role="alert">
           {resetError}

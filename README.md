@@ -58,6 +58,7 @@ cp .env.example .env
 | `PORT` | No | `4000` (backend) / `4173` (frontend) | Railway assigns its own at runtime and takes priority. |
 | `TRUST_PROXY_HOPS` | No | `1` (production only) | Number of reverse proxies in front of the backend; used to read the real client IP. |
 | `ADMIN_API_KEY` | No | unset — admin routes don't mount | Enables `/api/admin` and the `/admin` view (see below). |
+| `VITE_IDLE_TIMEOUT_MIN` | No | `10` | Frontend, build time. Minutes without interaction before the form asks "¿Sigues ahí?". |
 | `API_PROXY_TARGET` | Yes (frontend service) | — | Backend URL the frontend server forwards `/api` and `/health` to, e.g. `http://backend.railway.internal:4000`. Read at runtime. |
 
 The backend fails fast on startup if a variable marked "required in
@@ -127,6 +128,34 @@ off it answers `403 { "error": "registration_closed" }`.
 and replaces the days. If the new dates leave already-confirmed registrations
 outside them, the response reports how many in `outOfWindowCount`; those
 registrations are never modified or deleted.
+
+### Session handling
+
+- **Anonymous session with autosave.** Every visitor gets an `httpOnly` session
+  cookie (24 hours, renewed with activity) backed by Postgres. The form saves
+  itself as it is filled in and is tied to that session, so closing the tab or
+  refreshing brings the registration back with a "continuamos tu registro"
+  notice. Each save carries the whole form, so if the session expires halfway
+  through, the next save simply rebuilds the draft in a new one.
+- **One origin, `SameSite=Lax`.** The browser only ever talks to the frontend's
+  domain (which proxies `/api`), so the cookie is first-party and works in
+  Safari and private windows. It is `secure` in production.
+- **Shared devices.** At a fair the same tablet may be used by several people:
+  the restore notice offers "No soy …, empezar de nuevo", the form has a
+  "Borrar mis datos y empezar de nuevo" button, and after 10 minutes without
+  interaction (`VITE_IDLE_TIMEOUT_MIN`) with personal data on screen a
+  "¿Sigues ahí?" dialog counts down 60 seconds before clearing everything. The
+  confirmation screen resets itself after 2 minutes, with the countdown visible.
+  Resetting discards the browser's session and draft; confirmed registrations are
+  never deleted.
+- **Admin session.** `POST /api/admin/login` replaces the session id (against
+  session fixation) and marks the session as admin; logging out destroys it. It
+  expires after 2 hours without admin requests and the API then answers
+  `401 { "error": "session_expired" }`.
+- **Housekeeping.** A draft row is only created by the first autosave that
+  actually contains data, so opening the form (or a bot hitting it) writes
+  nothing. Unconfirmed drafts older than 7 days are deleted at startup and every
+  6 hours; the `session` table cleans itself.
 
 ### Architecture decisions
 

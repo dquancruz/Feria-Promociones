@@ -33,6 +33,48 @@ interface SelectedItem {
   priceCents: number;
 }
 
+// Read-only: a visitor who has not saved anything yet has no row, so merely opening the
+// form (or a bot hitting GET /draft) never writes to the database.
+export async function findRegistration(pool: Pool, sessionId: string): Promise<RegistrationRow | null> {
+  const { rows } = await pool.query<RegistrationRow>('SELECT * FROM registrations WHERE session_id = $1', [
+    sessionId,
+  ]);
+  return rows[0] ?? null;
+}
+
+// Does this autosave carry anything worth a database row? The form sends its whole state
+// on every save, so a pristine form arrives as empty strings and no selection.
+export function patchHasData(patch: RegistrationDraftUpdate): boolean {
+  return Boolean(
+    patch.nombre?.trim() ||
+      patch.apellidos?.trim() ||
+      patch.email?.trim() ||
+      patch.attendAt ||
+      patch.selectedItemIds?.length,
+  );
+}
+
+export const EMPTY_DRAFT: RegistrationDraft = {
+  status: 'draft',
+  nombre: '',
+  apellidos: '',
+  email: '',
+  attendAt: null,
+  selectedItemIds: [],
+};
+
+const STALE_DRAFT_DAYS = 7;
+
+// Drafts nobody came back to. Confirmed registrations are business data and are never touched.
+export async function deleteStaleDrafts(pool: Pool): Promise<number> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM registrations
+     WHERE status = 'draft' AND created_at < now() - make_interval(days => $1)`,
+    [STALE_DRAFT_DAYS],
+  );
+  return rowCount ?? 0;
+}
+
 export async function getOrCreateDraft(pool: Pool, sessionId: string): Promise<RegistrationRow> {
   const { rows } = await pool.query<RegistrationRow>(
     `INSERT INTO registrations (session_id) VALUES ($1)

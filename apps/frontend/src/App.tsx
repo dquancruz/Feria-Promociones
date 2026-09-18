@@ -1,18 +1,32 @@
 import type { CatalogItem, RegistrationConfirmation, RegistrationDraftUpdate } from '@feria/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ApiValidationError, confirmRegistration, fetchCatalog, fetchDraft, patchDraft } from './api/client';
+import { ApiValidationError, confirmRegistration, fetchCatalog, fetchDraft, patchDraft, resetSession } from './api/client';
 import type { FieldErrors } from './api/client';
 import { CatalogPanel } from './components/CatalogPanel';
 import { ConfirmationScreen } from './components/ConfirmationScreen';
 import { Header } from './components/Header';
+import { IdleModal } from './components/IdleModal';
 import type { InfoPanelValues } from './components/InfoPanel';
 import { InfoPanel } from './components/InfoPanel';
 import { SiteFooter } from './components/SiteFooter';
+import { useCountdown } from './hooks/useCountdown';
 import { useDebouncedCallback } from './hooks/useDebouncedCallback';
+import { useIdleTimeout } from './hooks/useIdleTimeout';
 import { combineDateAndTime, splitIsoDateTime } from './utils/datetime';
 import { computePreview } from './utils/discountPreview';
+import { reloadPage } from './utils/navigation';
 
 type Phase = 'loading' | 'form' | 'confirmed' | 'error';
+
+// On a shared tablet the next visitor must not find the previous one's data: after this
+// long without touching the form (with personal data on it) we ask, and then clear it.
+const DEFAULT_IDLE_TIMEOUT_MIN = 10;
+const IDLE_WARNING_SECONDS = 60;
+
+function idleTimeoutMs(): number {
+  const minutes = Number(import.meta.env.VITE_IDLE_TIMEOUT_MIN);
+  return (minutes > 0 ? minutes : DEFAULT_IDLE_TIMEOUT_MIN) * 60_000;
+}
 
 function App() {
   const [phase, setPhase] = useState<Phase>('loading');
@@ -29,6 +43,8 @@ function App() {
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
 
   const skipNextAutosaveRef = useRef(false);
+  const startingOverRef = useRef(false);
+  const saveInFlightRef = useRef<Promise<unknown>>(Promise.resolve());
   const valuesRef = useRef(values);
   valuesRef.current = values;
   const selectedItemIdsRef = useRef(selectedItemIds);
@@ -82,8 +98,9 @@ function App() {
     };
   }, []);
 
-  const { debounced: debouncedSave } = useDebouncedCallback(() => {
-    patchDraft(buildDraftPayload())
+  const { debounced: debouncedSave, cancel: cancelPendingSave } = useDebouncedCallback(() => {
+    if (startingOverRef.current) return;
+    saveInFlightRef.current = patchDraft(buildDraftPayload())
       .then(() => setSaveError(null))
       .catch((err: unknown) => {
         if (!(err instanceof ApiValidationError)) {
@@ -155,6 +172,25 @@ function App() {
     }
   }
 
+  // Discards this browser's draft and starts a clean session. A save still pending or in
+  // flight is dealt with first: landing after the reset, it would put the data straight back.
+  async function startOver() {
+    startingOverRef.current = true;
+    cancelPendingSave();
+    await saveInFlightRef.current;
+    try {
+      await resetSession();
+      reloadPage();
+    } catch {
+      startingOverRef.current = false;
+      setSaveError('No se pudieron borrar tus datos. Intenta de nuevo.');
+    }
+  }
+
+  const hasPersonalData = Boolean(values.nombre || values.apellidos || values.email);
+  const { idle, dismiss: stayHere } = useIdleTimeout(phase === 'form' && hasPersonalData, idleTimeoutMs());
+  const idleSecondsLeft = useCountdown(idle, IDLE_WARNING_SECONDS, () => void startOver());
+
   const preview = useMemo(() => computePreview(catalogById, selectedItemIds), [catalogById, selectedItemIds]);
 
   if (phase === 'loading') {
@@ -190,6 +226,9 @@ function App() {
             {showRestoredBanner && (
               <div className="restore-banner" role="status">
                 <p>Continuamos tu registro anterior — revisa tu selección antes de confirmar.</p>
+                <button type="button" className="link-button" onClick={() => void startOver()}>
+                  {values.nombre ? `No soy ${values.nombre}, empezar de nuevo` : 'No soy yo, empezar de nuevo'}
+                </button>
                 <button
                   type="button"
                   className="link-button"
@@ -217,8 +256,17 @@ function App() {
                 catalogLoading={catalogLoading}
               />
             </div>
+            {(hasPersonalData || selectedItemIds.size > 0) && (
+              <p className="privacy-actions">
+                <button type="button" className="link-button" onClick={() => void startOver()}>
+                  Borrar mis datos y empezar de nuevo
+                </button>
+              </p>
+            )}
           </>
         )}
+
+        {idle && <IdleModal secondsLeft={idleSecondsLeft} onStay={stayHere} onLeave={() => void startOver()} />}
 
         {saveError && (
           <p className="save-error" role="status">
