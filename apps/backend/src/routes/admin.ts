@@ -1,12 +1,18 @@
-import { Router } from 'express';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { adminLoginSchema, adminRegistrationFiltersSchema, eventSettingsInputSchema } from '@feria/shared';
+import { Router, type Request, type RequestHandler } from 'express';
+import rateLimit from 'express-rate-limit';
 import type { Pool } from 'pg';
 import { config } from '../config.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import * as admin from '../services/admin.js';
+import { getEvent, replaceEvent } from '../services/event.js';
 import { toCsv } from '../utils/csv.js';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
+
+export const DEFAULT_LOGIN_ATTEMPTS_PER_MINUTE = 5;
 
 const CSV_HEADERS = [
   'confirmationId',
@@ -31,34 +37,132 @@ function parsePagination(query: Record<string, unknown>): { limit: number; offse
   return { limit, offset };
 }
 
+// Blank inputs ("?day=") mean "no filter", not an invalid value.
+function parseFilters(query: Request['query']) {
+  const present = Object.fromEntries(Object.entries(query).filter(([, value]) => value !== ''));
+  return adminRegistrationFiltersSchema.parse(present);
+}
+
+// Hashing first gives both sides the same length, which timingSafeEqual requires, and
+// keeps the comparison time independent of how much of the key was right.
+function keyMatches(provided: string, expected: string): boolean {
+  const digest = (value: string) => createHash('sha256').update(value).digest();
+  return timingSafeEqual(digest(provided), digest(expected));
+}
+
+// Browser sessions (after POST /login) or, for scripts, the x-admin-key header.
+function hasAdminAccess(req: Request, adminKey: string): boolean {
+  if (req.session.isAdmin === true) return true;
+  const header = req.header('x-admin-key');
+  return header !== undefined && keyMatches(header, adminKey);
+}
+
+function destroySession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.destroy((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+function regenerateSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+export interface AdminRouterOptions {
+  loginAttemptsPerMinute?: number;
+}
+
 // Not mounted at all when ADMIN_API_KEY isn't set, so the admin data surface
 // doesn't exist by accident in an environment nobody meant to expose it in.
-export function createAdminRouter(pool: Pool): Router | null {
-  if (!config.adminApiKey) return null;
+export function createAdminRouter(pool: Pool, options: AdminRouterOptions = {}): Router | null {
+  const adminKey = config.adminApiKey;
+  if (!adminKey) return null;
 
   const router = Router();
 
-  router.use((req, res, next) => {
-    if (req.header('x-admin-key') !== config.adminApiKey) {
+  // A per-IP brake on guessing the key. Created per router so each app (and test) has its own count.
+  const loginLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: options.loginAttemptsPerMinute ?? DEFAULT_LOGIN_ATTEMPTS_PER_MINUTE,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'rate_limited', message: 'Demasiados intentos, espera un momento.' },
+  });
+
+  router.post(
+    '/login',
+    loginLimiter,
+    asyncHandler(async (req, res) => {
+      const { key } = adminLoginSchema.parse(req.body);
+      if (!keyMatches(key, adminKey)) {
+        res.status(401).json({ error: 'invalid_key', message: 'Clave incorrecta.' });
+        return;
+      }
+      // A fresh session id at the moment of privilege change, so an id that was known
+      // before logging in (session fixation) is worthless afterwards.
+      await regenerateSession(req);
+      req.session.isAdmin = true;
+      res.json({ isAdmin: true });
+    }),
+  );
+
+  router.post(
+    '/logout',
+    asyncHandler(async (req, res) => {
+      await destroySession(req);
+      res.clearCookie('sid');
+      res.status(204).end();
+    }),
+  );
+
+  router.get('/me', (req, res) => {
+    res.json({ isAdmin: hasAdminAccess(req, adminKey) });
+  });
+
+  const requireAdmin: RequestHandler = (req, res, next) => {
+    if (!hasAdminAccess(req, adminKey)) {
       res.status(401).json({ error: 'unauthorized' });
       return;
     }
     next();
-  });
+  };
+  router.use(requireAdmin);
+
+  router.get(
+    '/event',
+    asyncHandler(async (_req, res) => {
+      const event = await getEvent(pool);
+      if (!event) {
+        res.status(404).json({ error: 'event_not_configured' });
+        return;
+      }
+      res.json(event);
+    }),
+  );
+
+  router.put(
+    '/event',
+    asyncHandler(async (req, res) => {
+      const input = eventSettingsInputSchema.parse(req.body);
+      res.json(await replaceEvent(pool, input));
+    }),
+  );
 
   router.get(
     '/registrations',
     asyncHandler(async (req, res) => {
       const { limit, offset } = parsePagination(req.query);
-      const { registrations, total } = await admin.listConfirmedRegistrations(pool, { limit, offset });
+      const filters = parseFilters(req.query);
+      const { registrations, total } = await admin.listConfirmedRegistrations(pool, { limit, offset, filters });
       res.json({ registrations, total, limit, offset });
     }),
   );
 
   router.get(
     '/registrations.csv',
-    asyncHandler(async (_req, res) => {
-      const registrations = await admin.listAllConfirmedRegistrations(pool);
+    asyncHandler(async (req, res) => {
+      const registrations = await admin.listAllConfirmedRegistrations(pool, parseFilters(req.query));
       const csv = toCsv(
         CSV_HEADERS,
         registrations.map((registration) => [
@@ -67,7 +171,7 @@ export function createAdminRouter(pool: Pool): Router | null {
           registration.apellidos,
           registration.email,
           registration.attendAt ?? '',
-          registration.items.join('; '),
+          registration.items.map((item) => item.name).join('; '),
           String(registration.serviceDiscountPct),
           String(registration.productDiscountPct),
           String(registration.servicesTotal),
@@ -76,7 +180,17 @@ export function createAdminRouter(pool: Pool): Router | null {
           registration.confirmedAt,
         ]),
       );
-      res.type('text/csv').send(csv);
+      res
+        .type('text/csv')
+        .set('Content-Disposition', 'attachment; filename="registros.csv"')
+        .send(csv);
+    }),
+  );
+
+  router.get(
+    '/stats',
+    asyncHandler(async (_req, res) => {
+      res.json(await admin.getStats(pool));
     }),
   );
 

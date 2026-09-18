@@ -1,13 +1,15 @@
 import {
   calculateDiscounts,
+  isWithinEvent,
   type RegistrationConfirmation,
   type RegistrationDraft,
   type RegistrationDraftUpdate,
 } from '@feria/shared';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { ValidationError } from '../errors.js';
+import { RegistrationClosedError, ValidationError } from '../errors.js';
 import { centsToQuetzales } from '../utils/money.js';
+import { getEvent } from './event.js';
 
 type Queryable = Pool | PoolClient;
 
@@ -146,6 +148,9 @@ export async function confirmDraft(
       return { registration, alreadyConfirmed: true };
     }
 
+    const event = await getEvent(client);
+    if (!event?.registrationOpen) throw new RegistrationClosedError();
+
     // Items deactivated since they were picked no longer count. Removing them here (rather
     // than only ignoring them in the calculation) keeps the stored discount, the
     // confirmation screen and the admin view describing the same selection.
@@ -178,7 +183,10 @@ export async function confirmDraft(
     const emailIsValid = z.string().email().safeParse(registration.email).success;
     if (!emailIsValid) fieldErrors.email = 'Email inválido';
     if (!registration.attend_at) fieldErrors.attendAt = 'Fecha y hora son requeridas';
-    else if (registration.attend_at.getTime() < Date.now()) fieldErrors.attendAt = 'La fecha debe ser futura';
+    else if (registration.attend_at.getTime() <= Date.now()) fieldErrors.attendAt = 'La fecha debe ser futura';
+    else if (!isWithinEvent(registration.attend_at, event)) {
+      fieldErrors.attendAt = 'Elige un día y una hora dentro del horario de la feria.';
+    }
     if (currentItems.length === 0) {
       fieldErrors.selectedItemIds = 'Selecciona al menos un servicio o producto';
     }

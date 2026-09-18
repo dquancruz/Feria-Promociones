@@ -1,3 +1,4 @@
+import { addDays, todayInEventTimezone } from '@feria/shared';
 import type { Pool } from 'pg';
 
 interface SeedItem {
@@ -34,5 +35,35 @@ export async function seedCatalog(pool: Pool): Promise<void> {
       item.name,
       item.priceCents,
     ]);
+  }
+}
+
+const SAMPLE_EVENT_DAYS = 3;
+const SAMPLE_EVENT_LEAD_DAYS = 30;
+
+// Without an event the public form would show "registration closed", so the very first
+// start creates a sample one: open, three consecutive days a month from now, 09:00-18:00.
+// It is only a starting point for the admin to edit; it is never recreated afterwards.
+export async function seedEvent(pool: Pool): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rowCount } = await client.query('INSERT INTO event_settings (id) VALUES (1) ON CONFLICT DO NOTHING');
+    if (rowCount) {
+      const firstDay = addDays(todayInEventTimezone(), SAMPLE_EVENT_LEAD_DAYS);
+      const days = Array.from({ length: SAMPLE_EVENT_DAYS }, (_, index) => addDays(firstDay, index));
+      await client.query(
+        `INSERT INTO event_days (day, opens_at, closes_at)
+         SELECT day, '09:00', '18:00' FROM unnest($1::date[]) AS day`,
+        [days],
+      );
+      console.log(`No event was configured: created a sample one on ${days.join(', ')}. Edit it from the admin.`);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
 }

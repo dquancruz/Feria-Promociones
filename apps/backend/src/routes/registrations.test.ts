@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
-import { createTestPool, resetDb } from '../test/db.js';
+import { createTestPool, resetDb, testAttendAt } from '../test/db.js';
 
 describe('registrations draft/confirm flow', () => {
   let pool: Pool;
@@ -107,7 +107,7 @@ describe('registrations draft/confirm flow', () => {
       nombre: 'Ana',
       apellidos: 'Lopez',
       email: 'ana@example.com',
-      attendAt: '2026-10-01T15:00:00.000Z',
+      attendAt: testAttendAt(),
       selectedItemIds: [serviceA, serviceB, productA, productB, productC],
     });
 
@@ -132,7 +132,7 @@ describe('registrations draft/confirm flow', () => {
       nombre: 'Ana',
       apellidos: 'Lopez',
       email: 'ana@example.com',
-      attendAt: '2026-10-01T15:00:00.000Z',
+      attendAt: testAttendAt(),
       selectedItemIds: [serviceA, productA, productB, productC],
     });
     const first = await agent.post('/api/registrations/confirm');
@@ -161,7 +161,7 @@ describe('registrations draft/confirm flow', () => {
       nombre: 'Ana',
       apellidos: 'Lopez',
       email: 'ana@example.com',
-      attendAt: '2026-10-01T15:00:00.000Z',
+      attendAt: testAttendAt(),
       selectedItemIds: [serviceA],
     });
     await agent.patch('/api/registrations/draft').send({ nombre: '' });
@@ -196,7 +196,7 @@ describe('registrations draft/confirm flow', () => {
       nombre: 'Ana',
       apellidos: 'Lopez',
       email: 'ana@example.com',
-      attendAt: '2026-10-01T15:00:00.000Z',
+      attendAt: testAttendAt(),
       selectedItemIds: [serviceA],
     });
     await agent.post('/api/registrations/confirm');

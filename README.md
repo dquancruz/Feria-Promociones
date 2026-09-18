@@ -86,8 +86,9 @@ docker compose up --build
 This starts PostgreSQL, the backend API, and the frontend (on
 `http://localhost:4173`), wired together with the environment variables in
 `docker-compose.yml` and `.env`. The backend seeds the catalog
-automatically on startup if the `catalog_items` table is empty — no separate
-seed step to run.
+automatically on startup if the `catalog_items` table is empty, and creates a
+sample event (open, three consecutive days a month out, 09:00 to 18:00) if none
+exists yet — no separate seed step to run.
 
 ### Admin view
 
@@ -96,10 +97,36 @@ confirmed registrations — the input for building each client's personalized
 promotions portfolio. It asks for the key and calls the API (through the same
 origin as the rest of the app):
 
-- `GET /api/admin/registrations` — paginated JSON (`limit`/`offset`).
-- `GET /api/admin/registrations.csv` — the same data as CSV.
+- `POST /api/admin/login` `{ key }` starts an admin session (cookie),
+  `POST /api/admin/logout` ends it and `GET /api/admin/me` tells whether one is
+  active. Login is limited to 5 attempts per minute per IP.
+- `GET /api/admin/registrations` — paginated JSON (`limit`/`offset`), filterable
+  with `q` (name, surname or email, ignoring case and accents) and `day`
+  (`YYYY-MM-DD`, Guatemala time).
+- `GET /api/admin/registrations.csv` — the same data as CSV, with the same filters.
+- `GET /api/admin/stats` — confirmations per day, the five most requested items
+  and how many drafts are still open.
+- `GET /api/admin/event` and `PUT /api/admin/event` — read and replace the event
+  settings (see below).
 
-Both require an `x-admin-key` header matching `ADMIN_API_KEY`.
+Every admin route accepts either that session or, for scripts, an `x-admin-key`
+header matching `ADMIN_API_KEY`.
+
+### Event dates
+
+The days and hours of the fair are data, not code. They live in the database
+(`event_settings` and `event_days`), always in Guatemala time (UTC-6), and the
+public form reads them from `GET /api/event` (only days from today onwards).
+
+`POST /api/registrations/confirm` rejects a visit that is in the past, on a day
+that is not configured, outside that day's opening hours or off the slot grid
+(15, 30 or 60 minutes, counted from opening time). With registration switched
+off it answers `403 { "error": "registration_closed" }`.
+
+`PUT /api/admin/event` takes `{ name, location, slotMinutes, registrationOpen, days }`
+and replaces the days. If the new dates leave already-confirmed registrations
+outside them, the response reports how many in `outOfWindowCount`; those
+registrations are never modified or deleted.
 
 ### Architecture decisions
 
