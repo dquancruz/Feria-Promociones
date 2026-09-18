@@ -54,11 +54,11 @@ cp .env.example .env
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Yes | — | Postgres connection string. |
 | `SESSION_SECRET` | Yes | `dev-secret` (non-production only) | Signs the session cookie. |
-| `CORS_ORIGIN` | Yes | reflects any origin (non-production only) | Must match the deployed frontend's URL. |
+| `CORS_ORIGIN` | No | unset — no CORS headers | Only for a browser app on another origin calling the API directly. The bundled frontend is same-origin (see below). |
 | `PORT` | No | `4000` (backend) / `4173` (frontend) | Railway assigns its own at runtime and takes priority. |
 | `TRUST_PROXY_HOPS` | No | `1` (production only) | Number of reverse proxies in front of the backend; used to read the real client IP. |
 | `ADMIN_API_KEY` | No | unset — admin routes don't mount | Enables `/api/admin` and the `/admin` view (see below). |
-| `VITE_API_URL` | Yes, at frontend build time | — | Backend URL, baked into the frontend bundle when it's built. |
+| `API_PROXY_TARGET` | Yes (frontend service) | — | Backend URL the frontend server forwards `/api` and `/health` to, e.g. `http://backend.railway.internal:4000`. Read at runtime. |
 
 The backend fails fast on startup if a variable marked "required in
 production" is missing while `NODE_ENV=production` — see
@@ -74,7 +74,8 @@ npm run dev:frontend
 ```
 
 The frontend dev server runs on `http://localhost:5173` and the backend on
-`http://localhost:4000`.
+`http://localhost:4000`. Vite forwards `/api` to the backend, so the browser
+still only talks to one origin.
 
 ### Run with Docker Compose
 
@@ -82,8 +83,9 @@ The frontend dev server runs on `http://localhost:5173` and the backend on
 docker compose up --build
 ```
 
-This starts PostgreSQL, the backend API, and the frontend, wired together with
-the environment variables in `.env.example`. The backend seeds the catalog
+This starts PostgreSQL, the backend API, and the frontend (on
+`http://localhost:4173`), wired together with the environment variables in
+`docker-compose.yml` and `.env`. The backend seeds the catalog
 automatically on startup if the `catalog_items` table is empty — no separate
 seed step to run.
 
@@ -91,7 +93,8 @@ seed step to run.
 
 With `ADMIN_API_KEY` set, visiting `/admin` on the frontend shows a table of
 confirmed registrations — the input for building each client's personalized
-promotions portfolio. It asks for the key and calls the backend directly:
+promotions portfolio. It asks for the key and calls the API (through the same
+origin as the rest of the app):
 
 - `GET /api/admin/registrations` — paginated JSON (`limit`/`offset`).
 - `GET /api/admin/registrations.csv` — the same data as CSV.
@@ -112,17 +115,36 @@ catalog prices and recomputes both discounts from the registration's actual
 selected items, ignoring anything the client might have sent. A client can't
 confirm with a discount it didn't actually earn.
 
-**`sameSite: 'none'` on the session cookie in production.** The frontend and
-backend are deployed as separate Railway services on separate subdomains,
-which browsers treat as cross-site for cookie purposes. `SameSite=Lax` (the
-default) would silently drop the session cookie on the frontend's `fetch()`
-calls to the backend, breaking the autosave/session feature outright.
-`SameSite=None` requires `Secure`, which is only set in production.
+**One origin for the browser.** The frontend container serves the built app
+and forwards `/api` and `/health` to the backend (`apps/frontend/server.mjs`,
+locally the Vite dev server does the same). Everything the browser loads comes
+from a single origin, so the session cookie is first-party (`SameSite=Lax`,
+`Secure`, `HttpOnly`) and no CORS setup is needed. This matters because
+`*.up.railway.app` is on the Public Suffix List: two Railway services on
+separate subdomains are cross-site, and a `SameSite=None` cookie between them
+is treated as third-party and blocked by Safari and by private windows.
 
 **Money as integer cents.** Prices and totals are stored and computed in
 integer cents end-to-end, only formatted to `Q123.45` at the UI edge. This
 avoids the rounding drift that floating-point currency math is prone to,
 particularly when applying a percentage discount.
+
+### Deploying to Railway
+
+The project has three services: the managed Postgres plugin, `backend` and
+`frontend`, each built from its own Dockerfile (`apps/backend/Dockerfile`,
+`apps/frontend/Dockerfile`, with the repo root as the build context).
+
+1. **backend**: set `DATABASE_URL` (reference the Postgres plugin),
+   `SESSION_SECRET`, `NODE_ENV=production`, `PORT=4000` and, optionally,
+   `ADMIN_API_KEY`. It does not need a public domain: the frontend reaches it
+   over Railway's private network.
+2. **frontend**: set `PORT=4173` and `API_PROXY_TARGET` to the backend's private
+   address, e.g. `http://backend.railway.internal:4000`. Only this service needs
+   a public domain.
+3. The frontend forwards the client's `X-Forwarded-For`/`X-Forwarded-Proto`
+   headers unchanged, so the backend's default `TRUST_PROXY_HOPS=1` is right.
+   Raise it only if another proxy is added in front of the frontend.
 
 ### Other commands
 

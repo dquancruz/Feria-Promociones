@@ -20,6 +20,18 @@ describe('config', () => {
     await expect(import('./config.js')).rejects.toThrow('SESSION_SECRET');
   });
 
+  it('does not require CORS_ORIGIN in production, since the API is same-origin', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = 'postgresql://user:pass@host:5432/db';
+    process.env.SESSION_SECRET = 'a-real-secret';
+    delete process.env.CORS_ORIGIN;
+
+    const { config } = await import('./config.js');
+
+    expect(config.isProduction).toBe(true);
+    expect(config.corsOrigin).toBeUndefined();
+  });
+
   it('trusts one proxy hop by default and lets TRUST_PROXY_HOPS override it', async () => {
     delete process.env.TRUST_PROXY_HOPS;
     expect((await import('./config.js')).config.trustProxyHops).toBe(1);

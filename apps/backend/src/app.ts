@@ -22,7 +22,9 @@ export function createApp(pool: Pool, options: AppOptions = {}): Express {
     app.set('trust proxy', config.trustProxyHops);
   }
 
-  app.use(cors({ origin: config.corsOrigin ?? true, credentials: true }));
+  if (config.corsOrigin) {
+    app.use(cors({ origin: config.corsOrigin, credentials: true }));
+  }
 
   // Registered before the session middleware so Railway's health check never
   // depends on the database being reachable.

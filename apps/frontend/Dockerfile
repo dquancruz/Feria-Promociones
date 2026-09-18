@@ -9,15 +9,14 @@ COPY packages/shared/package.json packages/shared/package.json
 RUN npm ci --workspace=@feria/frontend --workspace=@feria/shared --include-workspace-root
 COPY apps/frontend apps/frontend
 COPY packages/shared packages/shared
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build -w apps/frontend
 
 FROM node:20-alpine AS run
 WORKDIR /app
-RUN npm install -g serve@14
 COPY --from=build /repo/apps/frontend/dist ./dist
+COPY apps/frontend/server.mjs ./server.mjs
 ENV PORT=4173
 EXPOSE 4173
 USER node
-CMD ["sh", "-c", "serve -s dist -l ${PORT}"]
+# API_PROXY_TARGET (e.g. http://backend.railway.internal:4000) is read at runtime.
+CMD ["node", "server.mjs"]
