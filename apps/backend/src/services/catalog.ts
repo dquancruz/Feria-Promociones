@@ -1,4 +1,4 @@
-import type { CatalogItem } from '@feria/shared';
+import { normalizeSearchText, type CatalogItem } from '@feria/shared';
 import type { Pool } from 'pg';
 
 interface CatalogItemRow {
@@ -21,13 +21,19 @@ function toCatalogItem(row: CatalogItemRow): CatalogItem {
   };
 }
 
+// The catalog is small, so filtering happens here on the full list instead of in SQL:
+// that makes matching accent-insensitive without the unaccent extension and means
+// characters like % and _ are just text, not LIKE wildcards.
 export async function listCatalog(pool: Pool, search?: string): Promise<CatalogItem[]> {
   const { rows } = await pool.query<CatalogItemRow>(
     `SELECT id, type, name, description, price_cents, active
      FROM catalog_items
-     WHERE active = true AND ($1::text IS NULL OR name ILIKE '%' || $1 || '%')
+     WHERE active = true
      ORDER BY type, name`,
-    [search ?? null],
   );
-  return rows.map(toCatalogItem);
+  const items = rows.map(toCatalogItem);
+
+  const needle = normalizeSearchText(search ?? '');
+  if (!needle) return items;
+  return items.filter((item) => normalizeSearchText(item.name).includes(needle));
 }

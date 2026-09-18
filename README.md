@@ -56,6 +56,7 @@ cp .env.example .env
 | `SESSION_SECRET` | Yes | `dev-secret` (non-production only) | Signs the session cookie. |
 | `CORS_ORIGIN` | Yes | reflects any origin (non-production only) | Must match the deployed frontend's URL. |
 | `PORT` | No | `4000` (backend) / `4173` (frontend) | Railway assigns its own at runtime and takes priority. |
+| `TRUST_PROXY_HOPS` | No | `1` (production only) | Number of reverse proxies in front of the backend; used to read the real client IP. |
 | `ADMIN_API_KEY` | No | unset — admin routes don't mount | Enables `/api/admin` and the `/admin` view (see below). |
 | `VITE_API_URL` | Yes, at frontend build time | — | Backend URL, baked into the frontend bundle when it's built. |
 

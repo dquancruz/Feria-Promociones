@@ -28,7 +28,7 @@ export async function listConfirmedRegistrations(
       `SELECT id, nombre, apellidos, email, attend_at, confirmed_at
        FROM registrations
        WHERE status = 'confirmed'
-       ORDER BY confirmed_at DESC
+       ORDER BY confirmed_at DESC, id
        LIMIT $1 OFFSET $2`,
       [limit, offset],
     ),
@@ -83,4 +83,17 @@ export async function listConfirmedRegistrations(
   });
 
   return { registrations, total: Number(countResult.rows[0].count) };
+}
+
+const EXPORT_PAGE_SIZE = 500;
+
+// Walks the whole table page by page so an export is never silently cut off at the
+// API's per-request page limit.
+export async function listAllConfirmedRegistrations(pool: Pool): Promise<AdminRegistration[]> {
+  const all: AdminRegistration[] = [];
+  for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
+    const { registrations } = await listConfirmedRegistrations(pool, { limit: EXPORT_PAGE_SIZE, offset });
+    all.push(...registrations);
+    if (registrations.length < EXPORT_PAGE_SIZE) return all;
+  }
 }

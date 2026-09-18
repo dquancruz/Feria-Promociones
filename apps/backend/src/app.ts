@@ -3,19 +3,23 @@ import express, { type Express } from 'express';
 import type { Pool } from 'pg';
 import { config } from './config.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { createRegistrationRateLimiter } from './middleware/rate-limit.js';
+import { createRegistrationRateLimiters, type RateLimitOptions } from './middleware/rate-limit.js';
 import { createAdminRouter } from './routes/admin.js';
 import { createCatalogRouter } from './routes/catalog.js';
 import { createRegistrationsRouter } from './routes/registrations.js';
 import { createSessionMiddleware } from './session.js';
 
-export function createApp(pool: Pool): Express {
+export interface AppOptions {
+  rateLimits?: RateLimitOptions;
+}
+
+export function createApp(pool: Pool, options: AppOptions = {}): Express {
   const app = express();
 
   if (config.isProduction) {
     // Railway terminates TLS at its proxy; without this, req.secure and the
     // rate limiter's client IP would both read the proxy's own connection.
-    app.set('trust proxy', 1);
+    app.set('trust proxy', config.trustProxyHops);
   }
 
   app.use(cors({ origin: config.corsOrigin ?? true, credentials: true }));
@@ -41,7 +45,7 @@ export function createApp(pool: Pool): Express {
   app.use(createSessionMiddleware(pool));
 
   app.use('/api/catalog', createCatalogRouter(pool));
-  app.use('/api/registrations', createRegistrationRateLimiter(), createRegistrationsRouter(pool));
+  app.use('/api/registrations', createRegistrationRateLimiters(options.rateLimits), createRegistrationsRouter(pool));
 
   const adminRouter = createAdminRouter(pool);
   if (adminRouter) {

@@ -31,6 +31,10 @@ export function createRegistrationsRouter(pool: Pool): Router {
       }
 
       const updated = await registrations.updateDraft(pool, registration.id, patch);
+      if (updated.status === 'confirmed') {
+        res.json(await registrations.buildConfirmationResponse(pool, updated));
+        return;
+      }
       const items = await registrations.getSelectedItems(pool, updated.id);
       const preview = calculateDiscounts({
         selectedServices: items.filter((item) => item.type === 'service'),
