@@ -11,6 +11,8 @@ const envSchema = z.object({
   DATABASE_URL: requiredInProduction,
   SESSION_SECRET: requiredInProduction,
   CORS_ORIGIN: requiredInProduction,
+  // Optional in every environment: the admin router simply doesn't mount without it.
+  ADMIN_API_KEY: z.string().min(1).optional(),
   PORT: z.string().optional(),
 });
 
@@ -27,4 +29,5 @@ export const config = {
   databaseUrl: result.data.DATABASE_URL,
   sessionSecret: result.data.SESSION_SECRET ?? 'dev-secret',
   corsOrigin: result.data.CORS_ORIGIN,
+  adminApiKey: result.data.ADMIN_API_KEY,
 };
