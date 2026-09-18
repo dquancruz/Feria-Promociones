@@ -2,15 +2,17 @@ import { z } from 'zod';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Falling back silently to a dev secret or an open CORS policy is fine on a laptop,
-// but doing that in production means the deploy "works" while being misconfigured in
-// a way nobody notices until it's a security incident — so those are required there.
+// Falling back silently to a dev secret is fine on a laptop, but doing that in
+// production means the deploy "works" while being misconfigured in a way nobody
+// notices until it's a security incident — so those are required there.
 const requiredInProduction = isProduction ? z.string().min(1) : z.string().min(1).optional();
 
 const envSchema = z.object({
   DATABASE_URL: requiredInProduction,
   SESSION_SECRET: requiredInProduction,
-  CORS_ORIGIN: requiredInProduction,
+  // Only needed when a browser app on another origin calls the API directly. The
+  // bundled frontend proxies /api, so it is same-origin and needs no CORS.
+  CORS_ORIGIN: z.string().min(1).optional(),
   // Optional in every environment: the admin router simply doesn't mount without it.
   ADMIN_API_KEY: z.string().min(1).optional(),
   PORT: z.string().optional(),

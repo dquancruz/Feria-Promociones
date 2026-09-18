@@ -16,10 +16,10 @@ export function createSessionMiddleware(pool: Pool): ReturnType<typeof session> 
     cookie: {
       httpOnly: true,
       secure: config.isProduction,
-      // Frontend and backend live on separate Railway subdomains, which counts as
-      // cross-site for cookie purposes — SameSite=Lax would silently drop the cookie
-      // on fetch() calls in production, so it has to be None there (requires Secure).
-      sameSite: config.isProduction ? 'none' : 'lax',
+      // The browser reaches the API through the frontend's own origin (/api is proxied),
+      // so this is a first-party cookie. Lax is enough, and unlike SameSite=None it is
+      // not blocked by Safari's or private windows' third-party cookie rules.
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000,
     },
   };
