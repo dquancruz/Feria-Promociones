@@ -29,6 +29,7 @@ export interface RegistrationRow {
 
 interface SelectedItem {
   id: string;
+  name: string;
   type: 'service' | 'product';
   priceCents: number;
 }
@@ -86,14 +87,15 @@ export async function getOrCreateDraft(pool: Pool, sessionId: string): Promise<R
 }
 
 export async function getSelectedItems(db: Queryable, registrationId: string): Promise<SelectedItem[]> {
-  const { rows } = await db.query<{ id: string; type: 'service' | 'product'; price_cents: number }>(
-    `SELECT ci.id, ci.type, ri.price_cents_snapshot AS price_cents
+  const { rows } = await db.query<{ id: string; name: string; type: 'service' | 'product'; price_cents: number }>(
+    `SELECT ci.id, ci.name, ci.type, ri.price_cents_snapshot AS price_cents
      FROM registration_items ri
      JOIN catalog_items ci ON ci.id = ri.catalog_item_id
-     WHERE ri.registration_id = $1`,
+     WHERE ri.registration_id = $1
+     ORDER BY ci.type, ci.name`,
     [registrationId],
   );
-  return rows.map((row) => ({ id: row.id, type: row.type, priceCents: row.price_cents }));
+  return rows.map((row) => ({ id: row.id, name: row.name, type: row.type, priceCents: row.price_cents }));
 }
 
 export async function updateDraft(
@@ -319,5 +321,17 @@ export async function buildConfirmationResponse(
     servicesTotal: centsToQuetzales(totals.servicesTotalCents),
     productsTotal: centsToQuetzales(totals.productsTotalCents),
     grandTotal: centsToQuetzales(totals.grandTotalCents),
+    nombre: registration.nombre,
+    apellidos: registration.apellidos,
+    attendAt: registration.attend_at ? registration.attend_at.toISOString() : null,
+    items,
+    servicesSubtotal: centsToQuetzales(totals.servicesSubtotalCents),
+    productsSubtotal: centsToQuetzales(totals.productsSubtotalCents),
+    subtotal: centsToQuetzales(totals.servicesSubtotalCents + totals.productsSubtotalCents),
+    servicesSavings: centsToQuetzales(totals.servicesSubtotalCents - totals.servicesTotalCents),
+    productsSavings: centsToQuetzales(totals.productsSubtotalCents - totals.productsTotalCents),
+    savings: centsToQuetzales(
+      totals.servicesSubtotalCents + totals.productsSubtotalCents - totals.grandTotalCents,
+    ),
   };
 }

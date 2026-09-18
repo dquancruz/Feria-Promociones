@@ -1,6 +1,7 @@
 import type {
   AdminRegistrationsResponse,
   CatalogItem,
+  EventSettings,
   RegistrationConfirmation,
   RegistrationDraftUpdate,
   RegistrationResponse,
@@ -20,6 +21,20 @@ export class ApiValidationError extends Error {
   }
 }
 
+// Any non-success answer that isn't a field validation problem. `code` is the API's
+// machine-readable `error` (for example "registration_closed"), when it sent one.
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string | undefined;
+
+  constructor(status: number, code?: string) {
+    super(`Request failed with status ${status}`);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -33,7 +48,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok && res.status !== 409) {
-    throw new Error(`Request to ${path} failed with status ${res.status}`);
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(res.status, body?.error);
   }
 
   return res.json() as Promise<T>;
@@ -42,6 +58,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function fetchCatalog(search: string): Promise<{ items: CatalogItem[] }> {
   const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
   return request(`/api/catalog${query}`);
+}
+
+// null when the organizers have not set up an event yet, which the form treats as closed.
+export async function fetchEvent(): Promise<EventSettings | null> {
+  try {
+    return await request<EventSettings>('/api/event');
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
 }
 
 export function fetchDraft(): Promise<RegistrationResponse> {
