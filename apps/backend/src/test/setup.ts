@@ -7,3 +7,7 @@ import { config } from 'dotenv';
 // is already set, e.g. in CI or `docker compose exec`).
 const rootDir = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../../..');
 config({ path: path.join(rootDir, '.env') });
+
+// Lets the admin router mount during tests without requiring every test file to know
+// about it; harmless for tests that never hit /api/admin.
+process.env.ADMIN_API_KEY ??= 'test-admin-key';

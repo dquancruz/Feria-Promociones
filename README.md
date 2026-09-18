@@ -48,6 +48,9 @@ Copy the example env file and adjust values as needed:
 cp .env.example .env
 ```
 
+`ADMIN_API_KEY` is optional. Set it to enable the admin view (see below); leave
+it blank and the admin routes simply don't mount.
+
 ### Run in development mode
 
 In two terminals:
@@ -68,6 +71,17 @@ docker compose up --build
 
 This starts PostgreSQL, the backend API, and the frontend, wired together with
 the environment variables in `.env.example`.
+
+### Admin view
+
+With `ADMIN_API_KEY` set, visiting `/admin` on the frontend shows a table of
+confirmed registrations — the input for building each client's personalized
+promotions portfolio. It asks for the key and calls the backend directly:
+
+- `GET /api/admin/registrations` — paginated JSON (`limit`/`offset`).
+- `GET /api/admin/registrations.csv` — the same data as CSV.
+
+Both require an `x-admin-key` header matching `ADMIN_API_KEY`.
 
 ### Other commands
 

@@ -1,11 +1,12 @@
 import type {
+  AdminRegistrationsResponse,
   CatalogItem,
   RegistrationConfirmation,
   RegistrationDraftUpdate,
   RegistrationResponse,
 } from '@feria/shared';
 
-const API_URL = import.meta.env.VITE_API_URL ?? '';
+export const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 export type FieldErrors = Record<string, string | string[] | undefined>;
 
@@ -64,4 +65,27 @@ export async function resetSession(): Promise<void> {
   if (!res.ok) {
     throw new Error(`Request to /api/registrations/session/reset failed with status ${res.status}`);
   }
+}
+
+export class ApiUnauthorizedError extends Error {
+  constructor() {
+    super('Unauthorized');
+    this.name = 'ApiUnauthorizedError';
+  }
+}
+
+export async function fetchAdminRegistrations(
+  adminKey: string,
+  params: { limit: number; offset: number },
+): Promise<AdminRegistrationsResponse> {
+  const query = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
+  const res = await fetch(`${API_URL}/api/admin/registrations?${query}`, {
+    headers: { 'x-admin-key': adminKey },
+  });
+
+  if (res.status === 401) throw new ApiUnauthorizedError();
+  if (!res.ok) {
+    throw new Error(`Request to /api/admin/registrations failed with status ${res.status}`);
+  }
+  return res.json() as Promise<AdminRegistrationsResponse>;
 }

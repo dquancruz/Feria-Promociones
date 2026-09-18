@@ -4,6 +4,7 @@ import type { Pool } from 'pg';
 import { config } from './config.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { createRegistrationRateLimiter } from './middleware/rate-limit.js';
+import { createAdminRouter } from './routes/admin.js';
 import { createCatalogRouter } from './routes/catalog.js';
 import { createRegistrationsRouter } from './routes/registrations.js';
 import { createSessionMiddleware } from './session.js';
@@ -41,6 +42,11 @@ export function createApp(pool: Pool): Express {
 
   app.use('/api/catalog', createCatalogRouter(pool));
   app.use('/api/registrations', createRegistrationRateLimiter(), createRegistrationsRouter(pool));
+
+  const adminRouter = createAdminRouter(pool);
+  if (adminRouter) {
+    app.use('/api/admin', adminRouter);
+  }
 
   app.use(errorHandler);
 
