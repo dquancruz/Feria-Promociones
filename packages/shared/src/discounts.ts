@@ -1,4 +1,4 @@
-// Discount rules (exact spec, see docs/discount-logic.md):
+// Discount rules (exact spec):
 //   Services: >=2 selected -> 3%; >=2 selected AND sum > Q.1,500 -> 5% instead.
 //   Products: >=3 selected -> 3%; >=5 selected -> 5%.
 // Money is handled in integer cents throughout to avoid floating point drift.
