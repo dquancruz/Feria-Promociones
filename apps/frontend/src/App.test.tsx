@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { CONFIRMED, EMPTY_DRAFT, installFetchMock, jsonResponse, makeEvent } from './test/mocks';
+import { downloadConfirmationPdf } from './utils/confirmationPdf';
 import { formatDayChip } from './utils/eventFormat';
+
+vi.mock('./utils/confirmationPdf', () => ({ downloadConfirmationPdf: vi.fn() }));
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -13,6 +16,7 @@ const FIRST_DAY = EVENT.days[0];
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.mocked(downloadConfirmationPdf).mockReset();
 });
 
 async function fillPersonalData(user: User) {
@@ -542,17 +546,50 @@ describe('confirmation', () => {
     expect(code).toHaveAttribute('title', CONFIRMED.confirmationId);
   });
 
-  it('offers printing and registering someone else', async () => {
+  it('prints without downloading anything', async () => {
     const user = userEvent.setup();
     const print = vi.fn();
     vi.stubGlobal('print', print);
     installFetchMock({ draft: CONFIRMED });
     render(<App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Imprimir o guardar como PDF' }));
+    await user.click(await screen.findByRole('button', { name: 'Imprimir' }));
 
     expect(print).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Registrar a otra persona' })).toBeInTheDocument();
+    expect(downloadConfirmationPdf).not.toHaveBeenCalled();
+  });
+
+  it('downloads the confirmation as a PDF without opening the print dialog', async () => {
+    const user = userEvent.setup();
+    const print = vi.fn();
+    vi.stubGlobal('print', print);
+    installFetchMock({ draft: CONFIRMED });
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Descargar PDF' }));
+
+    expect(downloadConfirmationPdf).toHaveBeenCalledWith(CONFIRMED, 'Feria de Promociones');
+    expect(print).not.toHaveBeenCalled();
+  });
+
+  it('says so when the PDF could not be generated, and keeps printing available', async () => {
+    const user = userEvent.setup();
+    vi.mocked(downloadConfirmationPdf).mockRejectedValueOnce(new Error('boom'));
+    installFetchMock({ draft: CONFIRMED });
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Descargar PDF' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo generar el PDF');
+    expect(screen.getByRole('button', { name: 'Descargar PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Imprimir' })).toBeInTheDocument();
+  });
+
+  it('offers registering someone else', async () => {
+    installFetchMock({ draft: CONFIRMED });
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'Registrar a otra persona' })).toBeInTheDocument();
   });
 });
 
