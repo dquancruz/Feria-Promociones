@@ -59,6 +59,7 @@ cp .env.example .env
 | `TRUST_PROXY_HOPS` | No | `1` (production only) | Number of reverse proxies in front of the backend; used to read the real client IP. |
 | `ADMIN_API_KEY` | No | unset — admin routes don't mount | Enables `/api/admin` and the `/admin` view (see below). |
 | `VITE_IDLE_TIMEOUT_MIN` | No | `10` | Frontend, build time. Minutes without interaction before the form asks "¿Sigues ahí?". |
+| `VITE_API_URL` | No | unset — relative `/api` paths | Frontend, build time. Only if the browser must call an API on another origin; leave it empty to use the frontend's own proxy. |
 | `API_PROXY_TARGET` | Yes (frontend service) | — | Backend URL the frontend server forwards `/api` and `/health` to, e.g. `http://backend.railway.internal:4000`. Read at runtime. |
 
 The backend fails fast on startup if a variable marked "required in
@@ -93,10 +94,26 @@ exists yet — no separate seed step to run.
 
 ### Admin view
 
-With `ADMIN_API_KEY` set, visiting `/admin` on the frontend shows a table of
-confirmed registrations — the input for building each client's personalized
-promotions portfolio. It asks for the key and calls the API (through the same
-origin as the rest of the app):
+With `ADMIN_API_KEY` set, visiting `/admin` on the frontend asks for the key and
+opens the admin panel, which has two tabs:
+
+- **Registros**: counters for confirmed registrations, registrations per day and
+  the five most requested items, then the confirmed registrations themselves —
+  the input for building each client's personalized promotions portfolio. They
+  can be searched by name or email, filtered by visit day and paged; selecting
+  a row opens a panel with the items grouped into services and products, the
+  discounts and the value with discount. Registrations whose visit no longer
+  falls on a configured day are marked "Fuera de fechas". "Descargar CSV"
+  exports every registration that matches the current filters. On phones the
+  table turns into a list of cards.
+- **Evento**: name, location, slot length, the "Registro abierto" switch and the
+  list of days with their opening and closing times, with a preview of what
+  clients will see. Saving reports how many confirmed registrations fall outside
+  the new dates (they are never modified), and removing a day that already has
+  registrations asks for confirmation first.
+
+If the admin session expires the panel goes back to the login with a notice.
+The panel talks to the API through the same origin as the rest of the app:
 
 - `POST /api/admin/login` `{ key }` starts an admin session (cookie),
   `POST /api/admin/logout` ends it and `GET /api/admin/me` tells whether one is
@@ -157,6 +174,35 @@ registrations are never modified or deleted.
   nothing. Unconfirmed drafts older than 7 days are deleted at startup and every
   6 hours; the `session` table cleans itself.
 
+### How a registration flows
+
+```mermaid
+sequenceDiagram
+  actor C as Client
+  participant F as Frontend server
+  participant B as Backend API
+  participant D as Postgres
+
+  C->>F: Open the form
+  F->>B: GET /api/event, GET /api/catalog
+  B->>D: Event days, catalog
+  B-->>C: Days, hours and items
+  C->>C: Pick items, discounts previewed in the browser
+  loop While the form is being filled
+    C->>F: PATCH /api/registrations/draft (whole form)
+    F->>B: Same request, session cookie included
+    B->>D: Save draft for this session
+  end
+  C->>F: Confirm attendance
+  F->>B: POST /api/registrations/confirm
+  B->>D: Validate visit slot and email, recompute discounts, mark confirmed
+  B-->>C: Confirmation with items, discounts and savings
+```
+
+The admin panel follows the same path: `POST /api/admin/login` starts an admin
+session and every later request reads the confirmed registrations, the stats
+and the event settings from Postgres through the same proxy.
+
 ### Architecture decisions
 
 **Monorepo with a shared package.** `packages/shared` holds the discount rules
@@ -201,6 +247,12 @@ The project has three services: the managed Postgres plugin, `backend` and
 3. The frontend forwards the client's `X-Forwarded-For`/`X-Forwarded-Proto`
    headers unchanged, so the backend's default `TRUST_PROXY_HOPS=1` is right.
    Raise it only if another proxy is added in front of the frontend.
+
+### Next steps
+
+The catalog of services and products is seeded on first start and changed
+directly in the database. Managing it from the admin panel (create, edit and
+deactivate items) is the natural next step, as are confirmation emails.
 
 ### Other commands
 
