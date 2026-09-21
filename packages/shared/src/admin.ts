@@ -55,5 +55,17 @@ export const adminStatsSchema = z.object({
     z.object({ name: z.string(), type: catalogItemTypeSchema, count: z.number().int().positive() }),
   ),
   draftsStarted: z.number().int().nonnegative(),
+  // Confirmed registrations whose visit is no longer on a configured event day.
+  outOfWindowCount: z.number().int().nonnegative(),
 });
 export type AdminStats = z.infer<typeof adminStatsSchema>;
+
+// POST /api/admin/registrations/delete-out-of-window: the admin confirms the number they were
+// shown, so a list that changed in the meantime is never deleted by surprise.
+export const adminDeleteOutOfWindowSchema = z.object({
+  expectedCount: z.number({ required_error: 'La cantidad es requerida' }).int().nonnegative(),
+});
+
+export interface AdminDeleteResult {
+  deleted: number;
+}

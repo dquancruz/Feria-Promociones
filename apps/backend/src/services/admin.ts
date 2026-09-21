@@ -9,7 +9,8 @@ import {
 } from '@feria/shared';
 import type { Pool } from 'pg';
 import { centsToQuetzales } from '../utils/money.js';
-import { outOfWindowSql } from './event.js';
+import { ConflictError } from '../errors.js';
+import { countOutOfWindowRegistrations, outOfWindowSql } from './event.js';
 
 interface RegistrationRow {
   id: string;
@@ -142,7 +143,7 @@ export async function listAllConfirmedRegistrations(
 const TOP_ITEMS_LIMIT = 5;
 
 export async function getStats(pool: Pool): Promise<AdminStats> {
-  const [confirmed, byDay, topItems, drafts] = await Promise.all([
+  const [confirmed, byDay, topItems, drafts, outOfWindowCount] = await Promise.all([
     pool.query<{ count: string }>("SELECT count(*)::text AS count FROM registrations WHERE status = 'confirmed'"),
     pool.query<{ date: string; count: string }>(
       `SELECT to_char(${LOCAL_ATTEND_DAY}, 'YYYY-MM-DD') AS date, count(*)::text AS count
@@ -162,6 +163,7 @@ export async function getStats(pool: Pool): Promise<AdminStats> {
       [TOP_ITEMS_LIMIT],
     ),
     pool.query<{ count: string }>("SELECT count(*)::text AS count FROM registrations WHERE status = 'draft'"),
+    countOutOfWindowRegistrations(pool),
   ]);
 
   return {
@@ -169,5 +171,34 @@ export async function getStats(pool: Pool): Promise<AdminStats> {
     byDay: byDay.rows.map((row) => ({ date: row.date, count: Number(row.count) })),
     topItems: topItems.rows.map((row) => ({ name: row.name, type: row.type, count: Number(row.count) })),
     draftsStarted: Number(drafts.rows[0].count),
+    outOfWindowCount,
   };
+}
+
+// Only confirmed registrations: a draft is somebody's form in progress, and it is not listed
+// in the admin, so it must not be reachable by id from here either. The items go with it.
+export async function deleteConfirmedRegistration(pool: Pool, id: string): Promise<boolean> {
+  const { rowCount } = await pool.query("DELETE FROM registrations WHERE id = $1 AND status = 'confirmed'", [id]);
+  return rowCount === 1;
+}
+
+// Deletes the confirmed registrations whose visit is outside the event dates, but only if
+// there are exactly as many as the admin was told. Otherwise nothing is deleted.
+export async function deleteOutOfWindowRegistrations(pool: Pool, expectedCount: number): Promise<number> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rowCount } = await client.query(
+      `DELETE FROM registrations r WHERE r.status = 'confirmed' AND ${outOfWindowSql('r')}`,
+    );
+    const deleted = rowCount ?? 0;
+    if (deleted !== expectedCount) throw new ConflictError('count_changed', deleted);
+    await client.query('COMMIT');
+    return deleted;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }

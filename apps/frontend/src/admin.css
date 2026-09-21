@@ -396,3 +396,50 @@ ol.stat-list {
   border-left-color: #c79a00;
   background: #fdf1c9;
 }
+
+/* Deleting ---------------------------------------------------------------- */
+
+.admin-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.danger-outline {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--error);
+  border-radius: var(--radius-input);
+  background: var(--surface);
+  color: var(--error);
+  font-weight: 600;
+}
+
+.danger-outline:hover {
+  background: #fdecea;
+}
+
+.delete-dialog {
+  width: min(100%, 30rem);
+  max-width: 30rem;
+}
+
+.delete-dialog-body {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.delete-dialog .modal-actions .danger {
+  min-height: 48px;
+  padding: 0.6rem 1.25rem;
+  border: 0;
+  border-radius: var(--radius-input);
+  background: var(--error);
+  color: #fff;
+  font-weight: 600;
+}
+
+.delete-dialog .modal-actions .danger:hover:not(:disabled) {
+  background: #8e1a10;
+}

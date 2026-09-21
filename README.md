@@ -105,7 +105,10 @@ opens the admin panel, which has two tabs:
   discounts and the value with discount. Registrations whose visit no longer
   falls on a configured day are marked "Fuera de fechas". "Descargar CSV"
   exports every registration that matches the current filters. On phones the
-  table turns into a list of cards.
+  table turns into a list of cards. Registrations can be deleted, one at a time
+  from the detail panel or all at once with "Eliminar registros fuera de fechas";
+  both ask the admin to type "eliminar" first, remind them to download the CSV,
+  and cannot be undone.
 - **Evento**: name, location, slot length, the "Registro abierto" switch and the
   list of days with their opening and closing times, with a preview of what
   clients will see. Saving reports how many confirmed registrations fall outside
@@ -122,8 +125,15 @@ The panel talks to the API through the same origin as the rest of the app:
   with `q` (name, surname or email, ignoring case and accents) and `day`
   (`YYYY-MM-DD`, Guatemala time).
 - `GET /api/admin/registrations.csv` — the same data as CSV, with the same filters.
-- `GET /api/admin/stats` — confirmations per day, the five most requested items
-  and how many drafts are still open.
+- `GET /api/admin/stats` — confirmations per day, the five most requested items,
+  how many drafts are still open and how many confirmed registrations fall
+  outside the event dates.
+- `DELETE /api/admin/registrations/:id` — deletes one confirmed registration and
+  its items (drafts are never deleted from here).
+- `POST /api/admin/registrations/delete-out-of-window` `{ expectedCount }` — deletes
+  the confirmed registrations whose visit is outside the event dates, but only if
+  there are exactly `expectedCount` of them; otherwise it answers `409` and deletes
+  nothing.
 - `GET /api/admin/event` and `PUT /api/admin/event` — read and replace the event
   settings (see below).
 
