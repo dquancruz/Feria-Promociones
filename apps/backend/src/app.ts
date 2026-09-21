@@ -32,7 +32,11 @@ export function createApp(pool: Pool, options: AppOptions = {}): Express {
   // framed, sniffed into another type or leak the URL through the Referer header.
   app.use(
     helmet({
-      contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
+      // useDefaults: false, otherwise helmet merges its own script/style/font rules into these.
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+      },
       crossOriginEmbedderPolicy: false,
       crossOriginOpenerPolicy: false,
       frameguard: { action: 'deny' },
