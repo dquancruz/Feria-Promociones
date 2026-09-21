@@ -262,6 +262,72 @@ cuerpo de más de 100 KB es `413 { "error": "payload_too_large" }` y una ruta
 bajo `/api` que no existe es `404 { "error": "not_found" }`. Solo los fallos
 realmente inesperados responden `500` y se registran en el log.
 
+## Modelo de datos
+
+```mermaid
+erDiagram
+  catalog_items ||--o{ registration_items : "se elige en"
+  registrations ||--o{ registration_items : "contiene"
+  session ||..o| registrations : "sid = session_id"
+
+  catalog_items {
+    uuid id PK
+    catalog_item_type type "service | product"
+    text name
+    int price_cents
+    boolean active
+  }
+  registrations {
+    uuid id PK
+    text session_id UK
+    registration_status status "draft | confirmed"
+    text nombre
+    text apellidos
+    text email
+    timestamptz attend_at
+    numeric service_discount_pct
+    numeric product_discount_pct
+    timestamptz confirmed_at
+  }
+  registration_items {
+    uuid registration_id PK, FK
+    uuid catalog_item_id PK, FK
+    int price_cents_snapshot
+  }
+  session {
+    varchar sid PK
+    json sess
+    timestamp expire
+  }
+  event_settings {
+    smallint id PK "siempre 1"
+    text name
+    text location
+    smallint slot_minutes "15, 30 o 60"
+    boolean registration_open
+  }
+  event_days {
+    date day PK
+    time opens_at
+    time closes_at
+  }
+```
+
+Las tablas salen de las migraciones en `apps/backend/migrations/`; `session` la
+crea `connect-pg-simple` al arrancar. Solo se muestran las columnas necesarias
+para entender el diseño.
+
+PostgreSQL encaja bien porque el dominio es relacional (registros, ítems y
+catálogo) y porque confirmar necesita transacciones y bloqueos: la regla de un
+registro confirmado por email se serializa con un bloqueo consultivo dentro de
+la transacción de confirmación. Cada fila de `registration_items` guarda el
+precio del momento (`price_cents_snapshot`), así que un cambio posterior en el
+catálogo no altera confirmaciones pasadas. El borrador es la misma fila de
+`registrations` con `status = 'draft'`, ligada al id de la sesión mediante
+`session_id`; al confirmar solo cambia su estado. Por último, el evento es
+configuración en la base de datos (`event_settings` y `event_days`) y no código:
+el administrador cambia las fechas desde el panel sin volver a desplegar.
+
 ### Límites de solicitudes
 
 Los límites son por minuto y responden
