@@ -51,6 +51,7 @@ describe('downloadConfirmationPdf', () => {
       'Servicio 1',
       'Q1,000.00',
       'Producto 1',
+      '5% - 0%',
       'Valor con descuento',
       'Q1,525.00',
       '2223-2425',

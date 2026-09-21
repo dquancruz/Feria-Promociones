@@ -95,8 +95,8 @@ function drawConfirmation(doc: jsPDF, confirmation: RegistrationConfirmation, ev
   doc.circle(MARGIN + 6, y + 6, 1.6, 'F');
   doc.setTextColor(...INK);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(26);
-  doc.text(`${confirmation.serviceDiscountPct} - ${confirmation.productDiscountPct}`, MARGIN + 31, y + 17, {
+  doc.setFontSize(24);
+  doc.text(`${confirmation.serviceDiscountPct}% - ${confirmation.productDiscountPct}%`, MARGIN + 31, y + 17, {
     align: 'center',
   });
   doc.setFontSize(9);
