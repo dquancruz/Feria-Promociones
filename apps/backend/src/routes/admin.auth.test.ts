@@ -66,7 +66,8 @@ describe('admin authentication', () => {
 
   it('issues a new session id on login, so one known beforehand is worthless', async () => {
     const app = createApp(pool);
-    const before = await request(app).get('/api/registrations/draft');
+    // A visitor who has started filling in the form, so a session exists before the login.
+    const before = await request(app).patch('/api/registrations/draft').send({ nombre: 'Ana' });
     const oldCookie = sessionCookie(before);
 
     const login = await request(app).post('/api/admin/login').set('Cookie', oldCookie).send({ key: ADMIN_KEY });

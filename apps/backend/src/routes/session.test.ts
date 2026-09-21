@@ -102,6 +102,96 @@ describe('anonymous visitor session', () => {
     });
   });
 
+  describe('session rows are created lazily too', () => {
+    const sessionCount = async () =>
+      Number((await pool.query<{ count: string }>('SELECT count(*) FROM session')).rows[0].count);
+    const setsSessionCookie = (response: { headers: Record<string, unknown> }) =>
+      String(response.headers['set-cookie'] ?? '').includes('sid=');
+
+    beforeEach(async () => {
+      // The store creates its table on first use; wait for it before touching it.
+      await request(createApp(pool)).get('/api/catalog');
+      await pool.query('DELETE FROM session');
+    });
+
+    it('leaves no session row and sends no cookie when a visitor only opens the form', async () => {
+      const agent = request.agent(createApp(pool));
+
+      const first = await agent.get('/api/registrations/draft');
+      await agent.get('/api/catalog');
+
+      expect(first.status).toBe(200);
+      expect(setsSessionCookie(first)).toBe(false);
+      expect(await sessionCount()).toBe(0);
+    });
+
+    it('leaves no session row for an autosave that carries nothing', async () => {
+      const agent = request.agent(createApp(pool));
+
+      const pristine = await agent.patch('/api/registrations/draft').send({ nombre: '', selectedItemIds: [] });
+
+      expect(pristine.status).toBe(200);
+      expect(setsSessionCookie(pristine)).toBe(false);
+      expect(await sessionCount()).toBe(0);
+    });
+
+    it('persists the session and the draft as soon as something is written, and finds them again', async () => {
+      const agent = request.agent(createApp(pool));
+
+      const saved = await agent.patch('/api/registrations/draft').send({ nombre: 'Ana' });
+
+      expect(setsSessionCookie(saved)).toBe(true);
+      expect(await sessionCount()).toBe(1);
+      expect(await registrationCount()).toBe(1);
+      // Same cookie, so the same session id: the draft is still there on the next visit.
+      expect((await agent.get('/api/registrations/draft')).body).toMatchObject({ nombre: 'Ana' });
+      expect(await sessionCount()).toBe(1);
+      expect(await registrationCount()).toBe(1);
+    });
+
+    it('keeps one session and one draft across a run of autosaves', async () => {
+      const agent = request.agent(createApp(pool));
+
+      await agent.patch('/api/registrations/draft').send({ nombre: 'Ana' });
+      await agent.patch('/api/registrations/draft').send({ nombre: 'Ana', apellidos: 'Lopez' });
+      await agent.patch('/api/registrations/draft').send(fullDraft());
+
+      expect(await sessionCount()).toBe(1);
+      expect(await registrationCount()).toBe(1);
+    });
+
+    it('persists the session when a confirm is the first thing a visitor does', async () => {
+      const agent = request.agent(createApp(pool));
+
+      const confirm = await agent.post('/api/registrations/confirm');
+
+      expect(confirm.status).toBe(400);
+      expect(setsSessionCookie(confirm)).toBe(true);
+      expect(await sessionCount()).toBe(1);
+      expect(await registrationCount()).toBe(1);
+    });
+
+    it('confirms a draft that started from a cookie-less visitor and shows it on reload', async () => {
+      const agent = request.agent(createApp(pool));
+      await agent.patch('/api/registrations/draft').send(fullDraft());
+
+      const confirm = await agent.post('/api/registrations/confirm');
+      const reload = await agent.get('/api/registrations/draft');
+
+      expect(confirm.status).toBe(200);
+      expect(reload.body).toMatchObject({ status: 'confirmed', confirmationId: confirm.body.confirmationId });
+    });
+
+    it('leaves no session row behind after a reset', async () => {
+      const agent = request.agent(createApp(pool));
+      await agent.patch('/api/registrations/draft').send(fullDraft());
+
+      await agent.post('/api/registrations/session/reset');
+
+      expect(await sessionCount()).toBe(0);
+    });
+  });
+
   describe('session reset', () => {
     it('gives the next person an empty form instead of the previous person\'s data', async () => {
       const agent = request.agent(createApp(pool));

@@ -1,8 +1,14 @@
 import { calculateDiscounts, registrationDraftUpdateSchema } from '@feria/shared';
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import type { Pool } from 'pg';
 import { asyncHandler } from '../middleware/async-handler.js';
 import * as registrations from '../services/registrations.js';
+
+// Call right before creating a draft row: the row is keyed by the session id, so the session
+// has to be persisted (and its cookie sent) for the same id to come back on the next request.
+function bindDraftToSession(req: Request): void {
+  req.session.hasDraft = true;
+}
 
 export function createRegistrationsRouter(pool: Pool): Router {
   const router = Router();
@@ -34,6 +40,7 @@ export function createRegistrationsRouter(pool: Pool): Router {
           res.json({ ...registrations.EMPTY_DRAFT, discountPreview: { serviceDiscountPct: 0, productDiscountPct: 0 } });
           return;
         }
+        bindDraftToSession(req);
         registration = await registrations.getOrCreateDraft(pool, req.sessionID);
       }
       if (registration.status === 'confirmed') {
@@ -65,6 +72,7 @@ export function createRegistrationsRouter(pool: Pool): Router {
   router.post(
     '/confirm',
     asyncHandler(async (req, res) => {
+      bindDraftToSession(req);
       const registration = await registrations.getOrCreateDraft(pool, req.sessionID);
       const { registration: result, alreadyConfirmed } = await registrations.confirmDraft(pool, registration.id);
       const body = await registrations.buildConfirmationResponse(pool, result);

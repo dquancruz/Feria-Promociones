@@ -159,8 +159,9 @@ registrations are never modified or deleted.
 
 ### Session handling
 
-- **Anonymous session with autosave.** Every visitor gets an `httpOnly` session
-  cookie (24 hours, renewed with activity) backed by Postgres. The form saves
+- **Anonymous session with autosave.** A visitor gets an `httpOnly` session
+  cookie (24 hours, renewed with activity) backed by Postgres the first time
+  something is saved (see Housekeeping). The form saves
   itself as it is filled in and is tied to that session, so closing the tab or
   refreshing brings the registration back with a "continuamos tu registro"
   notice. Each save carries the whole form, so if the session expires halfway
@@ -181,8 +182,12 @@ registrations are never modified or deleted.
   expires after 2 hours without admin requests and the API then answers
   `401 { "error": "session_expired" }`.
 - **Housekeeping.** A draft row is only created by the first autosave that
-  actually contains data, so opening the form (or a bot hitting it) writes
-  nothing. Unconfirmed drafts older than 7 days are deleted at startup and every
+  actually contains data (or by a confirm), and that same moment is when the
+  session is stored and its cookie sent, since the draft is keyed by the session
+  id. Opening the form, or a bot hitting the API, writes nothing: no draft, no
+  session row, no cookie. Because a visitor who has not saved anything has no
+  stable session id, the per-session rate limit only applies once they have
+  one; the per-IP limit covers everyone. Unconfirmed drafts older than 7 days are deleted at startup and every
   6 hours; the `session` table cleans itself.
 
 ### How a registration flows

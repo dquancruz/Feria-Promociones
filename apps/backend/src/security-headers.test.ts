@@ -70,9 +70,10 @@ describe('security headers', () => {
     process.env.CORS_ORIGIN = 'https://partner.example';
 
     const response = await request(await loadApp())
-      .get('/api/catalog')
+      .patch('/api/registrations/draft')
       .set('Origin', 'https://partner.example')
-      .set('X-Forwarded-Proto', 'https');
+      .set('X-Forwarded-Proto', 'https')
+      .send({ nombre: 'Ana' });
 
     expect(response.status).toBe(200);
     expect(response.headers['access-control-allow-origin']).toBe('https://partner.example');

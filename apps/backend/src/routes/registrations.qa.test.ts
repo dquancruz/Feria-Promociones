@@ -230,14 +230,17 @@ describe('registrations QA regressions', () => {
     it('limits a single session that floods the API without affecting other sessions', async () => {
       const app = createApp(pool, { rateLimits: { perSession: 5, perIp: 1000 } });
       const agent = request.agent(app);
+      // The per-session counter is keyed by the session id, which only stays the same once
+      // the visitor has saved something. This first request counts towards the limit too.
+      await agent.patch('/api/registrations/draft').send({ nombre: 'Ana' });
 
       const statuses: number[] = [];
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 6; i++) {
         statuses.push((await agent.get('/api/registrations/draft')).status);
       }
       const other = await request(app).get('/api/registrations/draft');
 
-      expect(statuses).toEqual([200, 200, 200, 200, 200, 429, 429]);
+      expect(statuses).toEqual([200, 200, 200, 200, 429, 429]);
       expect(other.status).toBe(200);
     });
 
@@ -255,7 +258,7 @@ describe('registrations QA regressions', () => {
     it('answers rate-limited requests with a Spanish JSON message', async () => {
       const app = createApp(pool, { rateLimits: { perSession: 1, perIp: 1000 } });
       const agent = request.agent(app);
-      await agent.get('/api/registrations/draft');
+      await agent.patch('/api/registrations/draft').send({ nombre: 'Ana' });
 
       const response = await agent.get('/api/registrations/draft');
 
