@@ -94,8 +94,9 @@ exists yet — no separate seed step to run.
 
 ### Admin view
 
-With `ADMIN_API_KEY` set, visiting `/admin` on the frontend asks for the key and
-opens the admin panel, which has two tabs:
+With `ADMIN_API_KEY` set, visiting `/admin` on the frontend (a trailing slash or
+capital letters make no difference) asks for the key and opens the admin panel,
+which has two tabs:
 
 - **Registros**: counters for confirmed registrations, registrations per day and
   the five most requested items, then the confirmed registrations themselves —
