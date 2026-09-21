@@ -64,7 +64,7 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
           </>
         )}
         {hasItems
-          ? 'Con lo que elegiste podemos preparar promociones a tu medida para tu visita.'
+          ? 'Prepararemos un portafolio de promociones con base en lo que elegiste.'
           : 'Cuando nos visites, con gusto te ayudamos a encontrar las promociones que más te convienen.'}
       </p>
 

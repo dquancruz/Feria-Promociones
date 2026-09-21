@@ -558,7 +558,7 @@ describe('confirmation', () => {
     installFetchMock({ draft: CONFIRMED });
     render(<App />);
 
-    expect(await screen.findByText(/Con lo que elegiste podemos preparar promociones a tu medida/)).toBeInTheDocument();
+    expect(await screen.findByText(/Prepararemos un portafolio de promociones con base en lo que elegiste./)).toBeInTheDocument();
     expect(screen.getByText('Valor con descuento')).toBeInTheDocument();
   });
 
