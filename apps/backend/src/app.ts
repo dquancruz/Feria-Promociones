@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import type { Pool } from 'pg';
 import { config } from './config.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { createRegistrationRateLimiters, type RateLimitOptions } from './middleware/rate-limit.js';
+import { createApiRateLimiter, createRegistrationRateLimiters, type RateLimitOptions } from './middleware/rate-limit.js';
 import { createAdminRouter, type AdminRouterOptions } from './routes/admin.js';
 import { createCatalogRouter } from './routes/catalog.js';
 import { createEventRouter } from './routes/event.js';
@@ -13,6 +13,8 @@ import { createSessionMiddleware } from './session.js';
 
 export interface AppOptions {
   rateLimits?: RateLimitOptions;
+  // Requests per minute per IP across the whole /api.
+  apiRateLimitPerIp?: number;
   admin?: AdminRouterOptions;
 }
 
@@ -60,6 +62,10 @@ export function createApp(pool: Pool, options: AppOptions = {}): Express {
       res.status(503).json({ status: 'error' });
     }
   });
+
+  // After /health so health checks are never limited; before the body parser and the session
+  // so throttled requests cost as little as possible.
+  app.use('/api', createApiRateLimiter(options.apiRateLimitPerIp));
 
   app.use(express.json());
   app.use(createSessionMiddleware(pool));

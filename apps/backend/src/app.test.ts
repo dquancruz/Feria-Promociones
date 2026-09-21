@@ -162,3 +162,80 @@ describe('unknown API routes', () => {
     expect((await request(app).get('/api/registrations/draft')).status).toBe(200);
   });
 });
+
+describe('general API rate limit', () => {
+  let pool: Pool;
+
+  beforeAll(async () => {
+    pool = await createTestPool();
+  });
+
+  afterAll(async () => {
+    await pool.end();
+  });
+
+  it('limits an IP across the whole /api, not just registrations', async () => {
+    const app = createApp(pool, { apiRateLimitPerIp: 4 });
+
+    const statuses: number[] = [];
+    for (const path of ['/api/catalog', '/api/event', '/api/admin/me', '/api/catalog', '/api/event']) {
+      statuses.push((await request(app).get(path)).status);
+    }
+
+    expect(statuses.slice(0, 4)).not.toContain(429);
+    expect(statuses[4]).toBe(429);
+  });
+
+  it('answers with the same Spanish JSON message as the other limiters', async () => {
+    const app = createApp(pool, { apiRateLimitPerIp: 1 });
+    await request(app).get('/api/catalog');
+
+    const response = await request(app).get('/api/catalog');
+
+    expect(response.status).toBe(429);
+    expect(response.body).toEqual({ error: 'rate_limited', message: 'Demasiadas solicitudes, espera un momento.' });
+  });
+
+  it('never limits the health endpoints', async () => {
+    const app = createApp(pool, { apiRateLimitPerIp: 1 });
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      statuses.push((await request(app).get('/health')).status);
+      statuses.push((await request(app).get('/health/ready')).status);
+    }
+
+    expect(statuses.every((status) => status === 200)).toBe(true);
+  });
+
+  it('gives each app its own counters, so tests do not share a budget', async () => {
+    const first = createApp(pool, { apiRateLimitPerIp: 1 });
+    await request(first).get('/api/catalog');
+    expect((await request(first).get('/api/catalog')).status).toBe(429);
+
+    const second = createApp(pool, { apiRateLimitPerIp: 1 });
+
+    expect((await request(second).get('/api/catalog')).status).toBe(200);
+  });
+
+  it('is generous by default and leaves the registrations limits as they were', async () => {
+    const app = createApp(pool);
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 100; i++) {
+      statuses.push((await request(app).get('/api/catalog')).status);
+    }
+
+    expect(statuses.filter((status) => status === 429)).toHaveLength(0);
+  });
+
+  it('does not stop the registrations per-session limit from applying first when it is lower', async () => {
+    const app = createApp(pool, { rateLimits: { perSession: 2, perIp: 1000 }, apiRateLimitPerIp: 1000 });
+    const agent = request.agent(app);
+    await agent.patch('/api/registrations/draft').send({ nombre: 'Ana' });
+
+    const statuses = [(await agent.get('/api/registrations/draft')).status, (await agent.get('/api/registrations/draft')).status];
+
+    expect(statuses).toEqual([200, 429]);
+  });
+});

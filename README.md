@@ -187,8 +187,8 @@ registrations are never modified or deleted.
   id. Opening the form, or a bot hitting the API, writes nothing: no draft, no
   session row, no cookie. Because a visitor who has not saved anything has no
   stable session id, the per-session rate limit only applies once they have
-  one; the per-IP limit covers everyone. Unconfirmed drafts older than 7 days are deleted at startup and every
-  6 hours; the `session` table cleans itself.
+  one; the per-IP limit covers everyone. Unconfirmed drafts older than 7 days
+  are deleted at startup and every 6 hours; the `session` table cleans itself.
 
 ### How a registration flows
 
@@ -234,6 +234,15 @@ a malformed body is `400 { "error": "invalid_json" }` and a body over 100 KB is
 `413 { "error": "payload_too_large" }`, and a path under `/api` that doesn't
 exist is `404 { "error": "not_found" }`. Only genuinely unexpected failures
 answer `500` and are logged.
+
+### Rate limits
+
+Limits are per minute and answer `429 { "error": "rate_limited" }` in Spanish.
+Every path under `/api` is limited to 1200 requests per IP, and `/health` and
+`/health/ready` are never limited. On top of that, `/api/registrations` keeps its
+own limits (120 per session and 600 per IP) and `POST /api/admin/login` allows 5
+attempts per IP. The numbers are generous on purpose: at the fair many people
+share the venue's WiFi and so one IP address.
 
 ### Security headers
 
