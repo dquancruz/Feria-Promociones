@@ -110,6 +110,17 @@ automáticamente si la tabla `catalog_items` está vacía, y crea un evento de
 ejemplo (abierto, tres días seguidos dentro de un mes, de 09:00 a 18:00) si
 todavía no existe ninguno; no hay que ejecutar ningún paso de carga aparte.
 
+### Otros comandos
+
+```bash
+npm run lint       # revisa el código de todos los workspaces
+npm run typecheck  # revisa los tipos de todos los workspaces
+npm run build      # compila todos los workspaces
+npm run test       # ejecuta las pruebas de todos los workspaces
+```
+
+## Funcionalidades
+
 ### Vista de administración
 
 Con `ADMIN_API_KEY` definida, al visitar `/admin` en el frontend (da igual una
@@ -136,32 +147,10 @@ administración, que tiene dos pestañas:
   un día que ya tiene registros pide confirmación antes.
 
 Si la sesión de administración expira, el panel vuelve al inicio de sesión con
-un aviso. El panel habla con la API a través del mismo origen que el resto de
-la app:
-
-- `POST /api/admin/login` `{ key }` inicia una sesión de administración
-  (cookie), `POST /api/admin/logout` la cierra y `GET /api/admin/me` indica si
-  hay una activa. El inicio de sesión está limitado a 5 intentos por minuto por
-  IP.
-- `GET /api/admin/registrations`: JSON paginado (`limit`/`offset`), filtrable
-  con `q` (nombre, apellidos o email, sin distinguir mayúsculas ni acentos) y
-  `day` (`YYYY-MM-DD`, hora de Guatemala).
-- `GET /api/admin/registrations.csv`: los mismos datos en CSV, con los mismos
-  filtros.
-- `GET /api/admin/stats`: confirmaciones por día, los cinco ítems más
-  solicitados, cuántos borradores siguen abiertos y cuántos registros
-  confirmados quedan fuera de las fechas del evento.
-- `DELETE /api/admin/registrations/:id`: elimina un registro confirmado y sus
-  ítems (los borradores nunca se eliminan desde aquí).
-- `POST /api/admin/registrations/delete-out-of-window` `{ expectedCount }`:
-  elimina los registros confirmados cuya visita queda fuera de las fechas del
-  evento, pero solo si hay exactamente `expectedCount`; de lo contrario responde
-  `409` y no elimina nada.
-- `GET /api/admin/event` y `PUT /api/admin/event`: leen y reemplazan la
-  configuración del evento (ver más abajo).
-
-Todas las rutas de administración aceptan esa sesión o, para scripts, una
-cabecera `x-admin-key` igual a `ADMIN_API_KEY`.
+un aviso. El panel sigue el mismo camino que el resto de la app: `POST
+/api/admin/login` inicia una sesión de administración y cada solicitud posterior
+lee de Postgres los registros confirmados, las estadísticas y la configuración
+del evento a través del mismo proxy (rutas en la sección API).
 
 ### Fechas del evento
 
@@ -215,7 +204,7 @@ nunca se modifican ni se eliminan.
   cubre a todos. Los borradores sin confirmar de más de 7 días se eliminan al
   arrancar y cada 6 horas; la tabla `session` se limpia sola.
 
-### Flujo de un registro
+## Flujo de un registro
 
 ```mermaid
 sequenceDiagram
@@ -250,17 +239,6 @@ para un mismo email se serializan para que solo una pase. Tiene un costo
 conocido: no hay forma de editar un registro confirmado, así que quien eligió
 mal el horario no puede volver a confirmar con el mismo email (ver próximos
 pasos).
-
-El panel de administración sigue el mismo camino: `POST /api/admin/login` inicia
-una sesión de administración y cada solicitud posterior lee de Postgres los
-registros confirmados, las estadísticas y la configuración del evento a través
-del mismo proxy.
-
-Las solicitudes que la API no puede procesar se responden en JSON, nunca con un
-stack trace: un cuerpo mal formado es `400 { "error": "invalid_json" }`, un
-cuerpo de más de 100 KB es `413 { "error": "payload_too_large" }` y una ruta
-bajo `/api` que no existe es `404 { "error": "not_found" }`. Solo los fallos
-realmente inesperados responden `500` y se registran en el log.
 
 ## Modelo de datos
 
@@ -328,6 +306,44 @@ catálogo no altera confirmaciones pasadas. El borrador es la misma fila de
 configuración en la base de datos (`event_settings` y `event_days`) y no código:
 el administrador cambia las fechas desde el panel sin volver a desplegar.
 
+## API
+
+### Rutas de administración
+
+Todas cuelgan de `/api/admin`:
+
+- `POST /api/admin/login` `{ key }` inicia una sesión de administración
+  (cookie), `POST /api/admin/logout` la cierra y `GET /api/admin/me` indica si
+  hay una activa. El inicio de sesión está limitado a 5 intentos por minuto por
+  IP.
+- `GET /api/admin/registrations`: JSON paginado (`limit`/`offset`), filtrable
+  con `q` (nombre, apellidos o email, sin distinguir mayúsculas ni acentos) y
+  `day` (`YYYY-MM-DD`, hora de Guatemala).
+- `GET /api/admin/registrations.csv`: los mismos datos en CSV, con los mismos
+  filtros.
+- `GET /api/admin/stats`: confirmaciones por día, los cinco ítems más
+  solicitados, cuántos borradores siguen abiertos y cuántos registros
+  confirmados quedan fuera de las fechas del evento.
+- `DELETE /api/admin/registrations/:id`: elimina un registro confirmado y sus
+  ítems (los borradores nunca se eliminan desde aquí).
+- `POST /api/admin/registrations/delete-out-of-window` `{ expectedCount }`:
+  elimina los registros confirmados cuya visita queda fuera de las fechas del
+  evento, pero solo si hay exactamente `expectedCount`; de lo contrario responde
+  `409` y no elimina nada.
+- `GET /api/admin/event` y `PUT /api/admin/event`: leen y reemplazan la
+  configuración del evento (ver Fechas del evento).
+
+Todas las rutas de administración aceptan esa sesión o, para scripts, una
+cabecera `x-admin-key` igual a `ADMIN_API_KEY`.
+
+### Manejo de errores
+
+Las solicitudes que la API no puede procesar se responden en JSON, nunca con un
+stack trace: un cuerpo mal formado es `400 { "error": "invalid_json" }`, un
+cuerpo de más de 100 KB es `413 { "error": "payload_too_large" }` y una ruta
+bajo `/api` que no existe es `404 { "error": "not_found" }`. Solo los fallos
+realmente inesperados responden `500` y se registran en el log.
+
 ### Límites de solicitudes
 
 Los límites son por minuto y responden
@@ -353,7 +369,7 @@ respuestas de `/api` reenviadas por el proxy conservan las cabeceras de la API.
 Cualquier cosa que cargue un script, una fuente o una imagen desde otro host
 requiere ampliar antes la política en `apps/frontend/server.mjs`.
 
-### Decisiones de arquitectura
+## Decisiones de arquitectura
 
 **Monorepo con un paquete compartido.** `packages/shared` contiene las reglas
 de descuento y los tipos de solicitud/respuesta de ambas apps. El frontend
@@ -384,7 +400,7 @@ centavos enteros de principio a fin, y solo se formatean como `Q123.45` en el
 borde de la interfaz. Así se evita la deriva de redondeo propia de la aritmética
 de moneda con punto flotante, en particular al aplicar un descuento porcentual.
 
-### Despliegue en Railway
+## Despliegue en Railway
 
 El proyecto tiene tres servicios: el plugin gestionado de Postgres, `backend` y
 `frontend`, cada uno construido desde su propio Dockerfile
@@ -403,7 +419,7 @@ repositorio como contexto de construcción).
    `TRUST_PROXY_HOPS=1` del backend es el correcto. Auméntalo solo si se añade
    otro proxy delante del frontend.
 
-### Próximos pasos
+## Próximos pasos
 
 El catálogo de servicios y productos se carga en el primer arranque y se cambia
 directamente en la base de datos. Gestionarlo desde el panel de administración
@@ -411,12 +427,3 @@ directamente en la base de datos. Gestionarlo desde el panel de administración
 los correos de confirmación. Permitir que un cliente modifique o cancele su
 registro confirmado (por ejemplo, para elegir otro turno) es otro, ya que la
 regla de un registro por email hoy no le deja forma de corregir un error.
-
-### Otros comandos
-
-```bash
-npm run lint       # revisa el código de todos los workspaces
-npm run typecheck  # revisa los tipos de todos los workspaces
-npm run build      # compila todos los workspaces
-npm run test       # ejecuta las pruebas de todos los workspaces
-```
