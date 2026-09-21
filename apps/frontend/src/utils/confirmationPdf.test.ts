@@ -66,6 +66,24 @@ describe('downloadConfirmationPdf', () => {
     expect(content).not.toContain('Visita:');
   });
 
+  it('has no price summary when nothing was chosen, and says so instead', async () => {
+    const { content } = await generate({
+      ...CONFIRMED,
+      items: [],
+      serviceDiscountPct: 0,
+      productDiscountPct: 0,
+      servicesSavings: 0,
+      productsSavings: 0,
+      subtotal: 0,
+      savings: 0,
+      grandTotal: 0,
+    });
+
+    expect(content).toContain('No elegiste servicios ni productos');
+    expect(content).not.toContain('Valor con descuento');
+    expect(content).not.toContain('ahorras');
+  });
+
   it('continues on a second page when there are too many items to fit', async () => {
     const many = Array.from({ length: 40 }, (_, i) => ({
       id: `s${i}`,

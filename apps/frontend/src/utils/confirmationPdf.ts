@@ -14,6 +14,9 @@ const INK: [number, number, number] = [0x15, 0x20, 0x1a];
 const MUTED: [number, number, number] = [0x4b, 0x5b, 0x51];
 const LINE: [number, number, number] = [0xd5, 0xdb, 0xd0];
 
+const NO_SELECTION_NOTE =
+  'No elegiste servicios ni productos. Cuando nos visites, con gusto te ayudamos a encontrar las promociones que más te convienen.';
+
 export function confirmationShortCode(confirmation: RegistrationConfirmation): string {
   return confirmation.confirmationId.slice(0, 8).toUpperCase();
 }
@@ -107,16 +110,25 @@ function drawConfirmation(doc: jsPDF, confirmation: RegistrationConfirmation, ev
   group('Servicios', confirmation.items.filter((item) => item.type === 'service'));
   group('Productos', confirmation.items.filter((item) => item.type === 'product'));
 
-  ensureSpace(50);
-  doc.setDrawColor(...LINE);
-  doc.line(MARGIN, y - 3, RIGHT, y - 3);
-  y += 3;
-  row(`Descuento en servicios (${confirmation.serviceDiscountPct}%)`, `ahorras ${formatAmount(confirmation.servicesSavings)}`);
-  row(`Descuento en productos (${confirmation.productDiscountPct}%)`, `ahorras ${formatAmount(confirmation.productsSavings)}`);
-  row('Tu selección', formatAmount(confirmation.subtotal));
-  row('Ahorro total', formatAmount(confirmation.savings));
-  y += 2;
-  row('Valor con descuento', formatAmount(confirmation.grandTotal), { bold: true });
+  if (confirmation.items.length === 0) {
+    // Nothing was chosen, so there is no price to summarize.
+    ensureSpace(14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(...INK);
+    doc.text(doc.splitTextToSize(NO_SELECTION_NOTE, RIGHT - MARGIN), MARGIN, y);
+  } else {
+    ensureSpace(50);
+    doc.setDrawColor(...LINE);
+    doc.line(MARGIN, y - 3, RIGHT, y - 3);
+    y += 3;
+    row(`Descuento en servicios (${confirmation.serviceDiscountPct}%)`, `ahorras ${formatAmount(confirmation.servicesSavings)}`);
+    row(`Descuento en productos (${confirmation.productDiscountPct}%)`, `ahorras ${formatAmount(confirmation.productsSavings)}`);
+    row('Tu selección', formatAmount(confirmation.subtotal));
+    row('Ahorro total', formatAmount(confirmation.savings));
+    y += 2;
+    row('Valor con descuento', formatAmount(confirmation.grandTotal), { bold: true });
+  }
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
