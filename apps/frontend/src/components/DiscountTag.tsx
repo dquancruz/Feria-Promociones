@@ -22,6 +22,7 @@ function GradeNumber({ value }: { value: number }) {
   return (
     <span key={value} className={rose ? 'tag-num tag-num-rise' : 'tag-num'}>
       {value}
+      <span className="tag-pct">%</span>
     </span>
   );
 }

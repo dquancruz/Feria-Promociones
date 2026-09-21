@@ -540,6 +540,12 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.tag-pct {
+  margin-left: 0.08em;
+  font-size: 0.5em;
+  opacity: 0.75;
+}
+
 .tag-dash {
   font-size: 3rem;
   opacity: 0.6;
