@@ -57,6 +57,12 @@ export function createApp(pool: Pool, options: AppOptions = {}): Express {
     app.use('/api/admin', adminRouter);
   }
 
+  // Anything under /api that no router claimed. /health is registered above and never
+  // reaches this, and the frontend server only proxies /api here, so nothing else is affected.
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'not_found' });
+  });
+
   app.use(errorHandler);
 
   return app;
