@@ -316,7 +316,7 @@ function App() {
       <>
         <Header event={event} />
         <main className="app-shell">
-          <ConfirmationScreen confirmation={confirmation} />
+          <ConfirmationScreen confirmation={confirmation} eventName={event?.name ?? 'Feria de Promociones'} />
           <SiteFooter />
         </main>
       </>

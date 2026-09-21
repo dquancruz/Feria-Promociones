@@ -2,6 +2,7 @@ import { splitAttendAt, type ConfirmedItem, type RegistrationConfirmation } from
 import { useState } from 'react';
 import { resetSession } from '../api/client';
 import { formatCountdown, useCountdown } from '../hooks/useCountdown';
+import { downloadConfirmationPdf } from '../utils/confirmationPdf';
 import { formatAmount, formatCents } from '../utils/currency';
 import { formatDayLong } from '../utils/eventFormat';
 import { reloadPage } from '../utils/navigation';
@@ -12,6 +13,8 @@ const AUTO_RESET_SECONDS = 120;
 
 interface ConfirmationScreenProps {
   confirmation: RegistrationConfirmation;
+  /** Printed on the downloaded PDF. */
+  eventName: string;
 }
 
 function ItemGroup({ title, items }: { title: string; items: ConfirmedItem[] }) {
@@ -31,9 +34,11 @@ function ItemGroup({ title, items }: { title: string; items: ConfirmedItem[] }) 
   );
 }
 
-export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
+export function ConfirmationScreen({ confirmation, eventName }: ConfirmationScreenProps) {
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   async function handleReset() {
     setResetting(true);
@@ -44,6 +49,18 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
     } catch {
       setResetError('No se pudo iniciar un nuevo registro. Intenta de nuevo.');
       setResetting(false);
+    }
+  }
+
+  async function handleDownload() {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      await downloadConfirmationPdf(confirmation, eventName);
+    } catch {
+      setDownloadError('No se pudo generar el PDF. Intenta de nuevo o usa Imprimir.');
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -111,8 +128,11 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
       </div>
 
       <div className="confirmation-actions no-print">
-        <button type="button" className="primary" onClick={() => window.print()}>
-          Imprimir o guardar como PDF
+        <button type="button" className="primary" onClick={() => void handleDownload()} disabled={downloading}>
+          {downloading ? 'Preparando PDF…' : 'Descargar PDF'}
+        </button>
+        <button type="button" className="secondary-button" onClick={() => window.print()}>
+          Imprimir
         </button>
         <button type="button" className="link-button" onClick={() => void handleReset()} disabled={resetting}>
           {resetting ? 'Preparando…' : 'Registrar a otra persona'}
@@ -122,9 +142,9 @@ export function ConfirmationScreen({ confirmation }: ConfirmationScreenProps) {
       <p className="countdown-note no-print" role="timer">
         Por tu privacidad, esta pantalla se reiniciará en {formatCountdown(secondsLeft)}.
       </p>
-      {resetError && (
-        <p className="save-error" role="alert">
-          {resetError}
+      {(resetError ?? downloadError) && (
+        <p className="save-error no-print" role="alert">
+          {resetError ?? downloadError}
         </p>
       )}
     </section>
