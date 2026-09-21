@@ -68,6 +68,7 @@ export function ConfirmationScreen({ confirmation, eventName }: ConfirmationScre
 
   const visit = confirmation.attendAt ? splitAttendAt(confirmation.attendAt) : null;
   const shortCode = confirmation.confirmationId.slice(0, 8).toUpperCase();
+  const hasItems = confirmation.items.length > 0;
 
   return (
     <section className="panel confirmation" aria-labelledby="confirmation-heading">
@@ -79,7 +80,9 @@ export function ConfirmationScreen({ confirmation, eventName }: ConfirmationScre
             Te esperamos el {formatDayLong(visit.day)} a las {visit.time}.{' '}
           </>
         )}
-        Prepararemos tu portafolio de promociones con base en lo que elegiste.
+        {hasItems
+          ? 'Prepararemos un portafolio de promociones con base en lo que elegiste.'
+          : 'Cuando nos visites, con gusto te ayudamos a encontrar las promociones que más te convienen.'}
       </p>
 
       <div className="confirmation-body">
@@ -98,32 +101,34 @@ export function ConfirmationScreen({ confirmation, eventName }: ConfirmationScre
           <ItemGroup title="Servicios" items={confirmation.items.filter((item) => item.type === 'service')} />
           <ItemGroup title="Productos" items={confirmation.items.filter((item) => item.type === 'product')} />
 
-          <dl className="summary-rows">
-            <div>
-              <dt>Descuento en servicios</dt>
-              <dd>
-                {confirmation.serviceDiscountPct}%, ahorras <span className="price">{formatAmount(confirmation.servicesSavings)}</span>
-              </dd>
-            </div>
-            <div>
-              <dt>Descuento en productos</dt>
-              <dd>
-                {confirmation.productDiscountPct}%, ahorras <span className="price">{formatAmount(confirmation.productsSavings)}</span>
-              </dd>
-            </div>
-            <div>
-              <dt>Tu selección</dt>
-              <dd className="price">{formatAmount(confirmation.subtotal)}</dd>
-            </div>
-            <div>
-              <dt>Ahorro total</dt>
-              <dd className="price">{formatAmount(confirmation.savings)}</dd>
-            </div>
-            <div className="summary-final">
-              <dt>Valor con descuento</dt>
-              <dd className="price">{formatAmount(confirmation.grandTotal)}</dd>
-            </div>
-          </dl>
+          {hasItems && (
+            <dl className="summary-rows">
+              <div>
+                <dt>Descuento en servicios</dt>
+                <dd>
+                  {confirmation.serviceDiscountPct}%, ahorras <span className="price">{formatAmount(confirmation.servicesSavings)}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Descuento en productos</dt>
+                <dd>
+                  {confirmation.productDiscountPct}%, ahorras <span className="price">{formatAmount(confirmation.productsSavings)}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Tu selección</dt>
+                <dd className="price">{formatAmount(confirmation.subtotal)}</dd>
+              </div>
+              <div>
+                <dt>Ahorro total</dt>
+                <dd className="price">{formatAmount(confirmation.savings)}</dd>
+              </div>
+              <div className="summary-final">
+                <dt>Valor con descuento</dt>
+                <dd className="price">{formatAmount(confirmation.grandTotal)}</dd>
+              </div>
+            </dl>
+          )}
         </div>
       </div>
 

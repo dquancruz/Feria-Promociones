@@ -16,7 +16,6 @@ interface CatalogPanelProps {
   selectedItemIds: Set<string>;
   onToggle: (id: string) => void;
   preview: PreviewTotals;
-  error: string | undefined;
 }
 
 const TAB_LABELS: Record<CatalogItemType, string> = { service: 'Servicios', product: 'Productos' };
@@ -52,7 +51,7 @@ function Rules({ title, tiers, reachedPct, hint }: { title: string; tiers: RuleT
   );
 }
 
-export function CatalogPanel({ catalog, selectedItemIds, onToggle, preview, error }: CatalogPanelProps) {
+export function CatalogPanel({ catalog, selectedItemIds, onToggle, preview }: CatalogPanelProps) {
   const [tab, setTab] = useState<CatalogItemType>('service');
   const [search, setSearch] = useState('');
 
@@ -88,6 +87,7 @@ export function CatalogPanel({ catalog, selectedItemIds, onToggle, preview, erro
         </span>
         Qué te interesa
       </h2>
+      <p className="field-hint">Es opcional: también puedes confirmar sin elegir nada.</p>
 
       <div className="field">
         <label htmlFor="catalog-search">Buscar servicios y productos</label>
@@ -98,8 +98,6 @@ export function CatalogPanel({ catalog, selectedItemIds, onToggle, preview, erro
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Por ejemplo: instalación"
           autoComplete="off"
-          aria-describedby={error ? 'selection-error' : undefined}
-          aria-invalid={Boolean(error)}
         />
       </div>
 
@@ -183,11 +181,6 @@ export function CatalogPanel({ catalog, selectedItemIds, onToggle, preview, erro
         )}
       </div>
 
-      {error && (
-        <p className="field-error" id="selection-error">
-          {error}
-        </p>
-      )}
     </section>
   );
 }

@@ -97,7 +97,7 @@ describe('anonymous visitor session', () => {
 
       expect(response.status).toBe(400);
       expect(Object.keys(response.body.fieldErrors)).toEqual(
-        expect.arrayContaining(['nombre', 'apellidos', 'email', 'attendAt', 'selectedItemIds']),
+        expect.arrayContaining(['nombre', 'apellidos', 'email', 'attendAt']),
       );
     });
   });

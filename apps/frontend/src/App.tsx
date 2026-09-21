@@ -76,7 +76,6 @@ function loadErrorMessage(err: unknown): string {
 
 function focusTarget(field: FormField, values: InfoPanelValues): string {
   if (field === 'attendAt') return values.date ? 'attend-time' : 'attend-day-0';
-  if (field === 'selectedItemIds') return 'catalog-search';
   return field;
 }
 
@@ -181,7 +180,7 @@ function App() {
   }
 
   function handleBlurField(field: FormField) {
-    const message = validateField(field, valuesRef.current, selectedItemIdsRef.current.size);
+    const message = validateField(field, valuesRef.current);
     if (message) setFieldErrors((prev) => ({ ...prev, [field]: message }));
     else clearError(field);
   }
@@ -193,7 +192,6 @@ function App() {
       else next.add(id);
       return next;
     });
-    clearError('selectedItemIds');
   }
 
   function focusField(field: FormField) {
@@ -211,7 +209,7 @@ function App() {
     setSubmitAttempted(true);
     setSaveError(null);
 
-    const clientErrors = validateAll(valuesRef.current, selectedItemIdsRef.current.size);
+    const clientErrors = validateAll(valuesRef.current);
     if (Object.keys(clientErrors).length > 0) {
       setFieldErrors(clientErrors);
       focusFirstError(clientErrors);
@@ -347,7 +345,7 @@ function App() {
         )}
 
         <p className="intro">
-          Confirma tu asistencia y elige lo que te interesa. Te preparamos promociones a tu medida.
+          Confirma tu asistencia. Si quieres, elige lo que te interesa y te preparamos promociones a tu medida.
         </p>
 
         <ErrorSummary errors={summaryErrors} onSelect={focusField} />
@@ -367,7 +365,6 @@ function App() {
             selectedItemIds={selectedItemIds}
             onToggle={handleToggleItem}
             preview={preview}
-            error={fieldErrorMessage(fieldErrors, 'selectedItemIds')}
           />
           <SummaryCard ref={summaryRef} preview={preview} onConfirm={() => void handleConfirm()} submitting={submitting} />
         </div>

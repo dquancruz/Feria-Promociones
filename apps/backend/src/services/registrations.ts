@@ -231,10 +231,6 @@ export async function confirmDraft(
     else if (!isWithinEvent(registration.attend_at, event)) {
       fieldErrors.attendAt = 'Elige un día y una hora dentro del horario de la feria.';
     }
-    if (currentItems.length === 0) {
-      fieldErrors.selectedItemIds = 'Selecciona al menos un servicio o producto';
-    }
-
     if (emailIsValid) {
       // Deliberately a lock plus a lookup instead of a unique index: a unique index would
       // fail its migration if the database already holds duplicates. The advisory lock makes
