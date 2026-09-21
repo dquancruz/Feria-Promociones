@@ -213,6 +213,11 @@ The admin panel follows the same path: `POST /api/admin/login` starts an admin
 session and every later request reads the confirmed registrations, the stats
 and the event settings from Postgres through the same proxy.
 
+Requests the API can't process are answered in JSON, never with a stack trace:
+a malformed body is `400 { "error": "invalid_json" }` and a body over 100 KB is
+`413 { "error": "payload_too_large" }`. Only genuinely unexpected failures
+answer `500` and are logged.
+
 ### Architecture decisions
 
 **Monorepo with a shared package.** `packages/shared` holds the discount rules
