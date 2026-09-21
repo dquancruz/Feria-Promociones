@@ -41,6 +41,12 @@ describe('security headers', () => {
     expect(response.headers['x-powered-by']).toBeUndefined();
   });
 
+  it('sends a CSP that allows nothing but forbids framing, with no helmet defaults mixed in', async () => {
+    const response = await request(await loadApp()).get('/api/catalog');
+
+    expect(response.headers['content-security-policy']).toBe("default-src 'none';frame-ancestors 'none'");
+  });
+
   it('sets the same headers on health checks, 404s and errors', async () => {
     const app = await loadApp();
 
