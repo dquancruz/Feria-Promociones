@@ -122,3 +122,43 @@ describe('request body errors', () => {
     expect(consoleError).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('unknown API routes', () => {
+  let pool: Pool;
+
+  beforeAll(async () => {
+    pool = await createTestPool();
+  });
+
+  afterAll(async () => {
+    await pool.end();
+  });
+
+  it('answers 404 JSON instead of the default HTML page', async () => {
+    const response = await request(createApp(pool)).get('/api/noexiste');
+
+    expect(response.status).toBe(404);
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(response.body).toEqual({ error: 'not_found' });
+  });
+
+  it('answers 404 JSON for an unknown path under a real router, whatever the method', async () => {
+    const app = createApp(pool);
+
+    const wrongPath = await request(app).get('/api/registrations/nope');
+    const wrongMethod = await request(app).delete('/api/catalog');
+
+    expect(wrongPath.status).toBe(404);
+    expect(wrongPath.body).toEqual({ error: 'not_found' });
+    expect(wrongMethod.status).toBe(404);
+    expect(wrongMethod.body).toEqual({ error: 'not_found' });
+  });
+
+  it('leaves the health endpoints and the real API routes alone', async () => {
+    const app = createApp(pool);
+
+    expect((await request(app).get('/health')).body).toEqual({ status: 'ok' });
+    expect((await request(app).get('/health/ready')).status).toBe(200);
+    expect((await request(app).get('/api/registrations/draft')).status).toBe(200);
+  });
+});

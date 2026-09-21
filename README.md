@@ -215,7 +215,8 @@ and the event settings from Postgres through the same proxy.
 
 Requests the API can't process are answered in JSON, never with a stack trace:
 a malformed body is `400 { "error": "invalid_json" }` and a body over 100 KB is
-`413 { "error": "payload_too_large" }`. Only genuinely unexpected failures
+`413 { "error": "payload_too_large" }`, and a path under `/api` that doesn't
+exist is `404 { "error": "not_found" }`. Only genuinely unexpected failures
 answer `500` and are logged.
 
 ### Architecture decisions
