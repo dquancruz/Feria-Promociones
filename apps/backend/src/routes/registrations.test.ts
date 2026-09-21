@@ -38,7 +38,7 @@ describe('registrations draft/confirm flow', () => {
     productC = rows.find((r) => r.name === 'Producto C')!.id;
   });
 
-  it('creates an empty draft on first contact and persists the session cookie', async () => {
+  it('answers first contact with an empty draft, and persists the session cookie once something is saved', async () => {
     const agent = request.agent(createApp(pool));
     const response = await agent.get('/api/registrations/draft');
 
@@ -51,7 +51,12 @@ describe('registrations draft/confirm flow', () => {
       attendAt: null,
       selectedItemIds: [],
     });
-    expect(response.headers['set-cookie']).toBeDefined();
+    // Nothing to remember yet, so no session is created and no cookie is sent.
+    expect(response.headers['set-cookie']).toBeUndefined();
+
+    const saved = await agent.patch('/api/registrations/draft').send({ nombre: 'Ana' });
+
+    expect(saved.headers['set-cookie']).toBeDefined();
   });
 
   it('PATCH updates fields and selections, returning a live discount preview', async () => {

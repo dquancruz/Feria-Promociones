@@ -11,7 +11,10 @@ export function createSessionMiddleware(pool: Pool): ReturnType<typeof session> 
     name: 'sid',
     secret: config.sessionSecret,
     resave: false,
-    saveUninitialized: true,
+    // A session only reaches the store, and the browser only gets its cookie, once something is
+    // written to it. Merely opening the form (or a bot hitting the API) leaves no row behind.
+    // Whatever creates a draft must therefore write to the session first: see bindDraftToSession.
+    saveUninitialized: false,
     rolling: true,
     cookie: {
       httpOnly: true,
@@ -29,6 +32,10 @@ export function createSessionMiddleware(pool: Pool): ReturnType<typeof session> 
 
 declare module 'express-session' {
   interface SessionData {
+    // Set when a draft row is created for this session. Its only job is to make the session
+    // "modified" so it is persisted and its cookie is sent; without it the id would change
+    // on every request and the draft (keyed by session id) could never be found again.
+    hasDraft?: boolean;
     isAdmin?: boolean;
     // Epoch milliseconds of the last admin request; drives the idle timeout.
     adminLastSeen?: number;

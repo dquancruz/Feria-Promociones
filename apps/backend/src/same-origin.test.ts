@@ -36,7 +36,11 @@ describe('same-origin deployment', () => {
   it('issues the session cookie as first-party: Lax, Secure and HttpOnly', async () => {
     const app = await loadApp();
 
-    const response = await request(app).get('/api/catalog').set('X-Forwarded-Proto', 'https');
+    // The cookie is only issued once a visitor saves something, so start a draft.
+    const response = await request(app)
+      .patch('/api/registrations/draft')
+      .set('X-Forwarded-Proto', 'https')
+      .send({ nombre: 'Ana' });
 
     const cookie = String(response.headers['set-cookie']);
     expect(cookie).toMatch(/^sid=/);
