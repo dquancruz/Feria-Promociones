@@ -86,7 +86,15 @@ producción" mientras `NODE_ENV=production`; ver `apps/backend/src/config.ts`.
 
 ### Ejecutar en modo desarrollo
 
-En dos terminales:
+Primero levanta solo PostgreSQL con Docker Compose:
+
+```bash
+docker compose up -d postgres
+```
+
+Queda expuesto en el puerto 5434 del host, que es el que usa `DATABASE_URL` en
+`.env.example`. El backend crea las tablas y carga el catálogo y un evento de
+ejemplo al arrancar. Después, en dos terminales:
 
 ```bash
 npm run dev:backend
@@ -109,6 +117,27 @@ Esto levanta PostgreSQL, la API del backend y el frontend (en
 automáticamente si la tabla `catalog_items` está vacía, y crea un evento de
 ejemplo (abierto, tres días seguidos dentro de un mes, de 09:00 a 18:00) si
 todavía no existe ninguno; no hay que ejecutar ningún paso de carga aparte.
+
+### Pruebas
+
+Las pruebas del backend son de integración y corren contra un PostgreSQL real,
+el que indique `DATABASE_URL` (aplican las migraciones de
+`apps/backend/migrations/` por su cuenta). Vacían las tablas entre pruebas, así
+que no las apuntes a una base con datos que quieras conservar: crea una aparte.
+Con el Postgres de Docker Compose en marcha:
+
+```bash
+docker compose exec postgres createdb -U feria feria_test
+DATABASE_URL=postgresql://feria:feria@localhost:5434/feria_test npm run test
+```
+
+Las pruebas del frontend y las del paquete compartido no necesitan base de
+datos. Hoy hay 170 pruebas en el backend, 165 en el frontend y 36 en
+`packages/shared`.
+
+El flujo de CI (`.github/workflows/ci.yml`) ejecuta lint, verificación de tipos,
+compilación y pruebas en cada push y en cada pull request hacia `main`, con un
+Postgres 16 como servicio.
 
 ### Otros comandos
 
