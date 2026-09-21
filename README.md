@@ -2,11 +2,36 @@
 
 **En línea**: https://feria-de-promociones.up.railway.app
 
+![Formulario público: datos del cliente, selección de día y hora, y catálogo de productos con las reglas de descuento](screenshots/formulario-1.png)
+
+![Formulario público: resumen de descuentos de servicios y productos, valor con descuento y botón para confirmar asistencia](screenshots/formulario-2.png)
+
+![Panel de administración: pestaña Evento con el nombre, la duración de los turnos y los días de la feria](screenshots/admin.png)
+
 Plataforma web para la feria anual de promociones. Los clientes confirman su
 asistencia y eligen de antemano los servicios y/o productos que les interesan,
 de modo que se pueda preparar un portafolio de promociones personalizado para
 cada cliente confirmado. Los descuentos según el interés se calculan
 automáticamente y se muestran al cliente antes de confirmar.
+
+## Reglas de descuento
+
+| Categoría | Condición | Descuento |
+| --- | --- | --- |
+| Servicios | 2 o más servicios | 3 % |
+| Servicios | 2 o más servicios y suma mayor a Q1,500 | 5 % |
+| Productos | 3 o más productos | 3 % |
+| Productos | 5 o más productos | 5 % |
+
+Cada categoría se calcula por separado, y el descuento de servicios y el de
+productos se muestran uno junto al otro. Los dos porcentajes de servicios no se
+suman: cuando se cumple la condición del 5 %, ese reemplaza al 3 %. "Mayor a
+Q1,500" es estricto: dos servicios que suman exactamente Q1,500.00 obtienen 3 %,
+y con Q1,500.01 pasan a 5 %.
+
+El cálculo vive en `packages/shared/src/discounts.ts`. Lo usan tanto la vista
+previa del formulario como la confirmación en el backend, y
+`packages/shared/src/discounts.test.ts` cubre cada caso límite.
 
 ## Tecnologías
 
@@ -15,7 +40,7 @@ automáticamente y se muestran al cliente antes de confirmar.
 - **Base de datos**: PostgreSQL.
 - **Paquete compartido**: tipos y lógica de cálculo de descuentos comunes al
   frontend y al backend.
-- **Infraestructura**: un Docker por servicio, orquestados en local con Docker
+- **Infraestructura**: una imagen Docker por servicio, orquestados en local con Docker
   Compose y desplegados como servicios separados en la nube.
 
 Es un monorepo con npm workspaces:
@@ -55,7 +80,7 @@ cp .env.example .env
 | `DATABASE_URL` | Sí | — | Cadena de conexión a Postgres. |
 | `SESSION_SECRET` | Sí | `dev-secret` (solo fuera de producción) | Firma la cookie de sesión. |
 | `CORS_ORIGIN` | No | sin definir — no se envían cabeceras CORS | Solo para una app de navegador en otro origen que llame directamente a la API. El frontend incluido es del mismo origen (ver más abajo). |
-| `PORT` | No | `4000` (backend) / `4173` (frontend) | Railway asigna el suyo en tiempo de ejecución y tiene prioridad. |
+| `PORT` | No | `4000` (backend) / `4173` (frontend) | Railway asigna el suyo en tiempo de ejecución y tiene prioridad. En el backend se fija a mano (`PORT=4000`, ver Despliegue en Railway) para que `API_PROXY_TARGET` del frontend apunte a un puerto conocido. |
 | `TRUST_PROXY_HOPS` | No | `1` (solo en producción) | Número de proxies inversos delante del backend; sirve para leer la IP real del cliente. |
 | `ADMIN_API_KEY` | No | sin definir — las rutas de administración no se montan | Habilita `/api/admin` y la vista `/admin` (ver más abajo). |
 | `VITE_IDLE_TIMEOUT_MIN` | No | `10` | Frontend, en tiempo de compilación. Minutos de inactividad antes de que el formulario pregunte "¿Sigues ahí?". |
@@ -67,7 +92,15 @@ producción" mientras `NODE_ENV=production`; ver `apps/backend/src/config.ts`.
 
 ### Ejecutar en modo desarrollo
 
-En dos terminales:
+Primero levanta solo PostgreSQL con Docker Compose:
+
+```bash
+docker compose up -d postgres
+```
+
+Queda expuesto en el puerto 5434 del host, que es el que usa `DATABASE_URL` en
+`.env.example`. El backend crea las tablas y carga el catálogo y un evento de
+ejemplo al arrancar. Después, en dos terminales:
 
 ```bash
 npm run dev:backend
@@ -88,8 +121,40 @@ Esto levanta PostgreSQL, la API del backend y el frontend (en
 `http://localhost:4173`), conectados mediante las variables de entorno de
 `docker-compose.yml` y `.env`. Al arrancar, el backend carga el catálogo
 automáticamente si la tabla `catalog_items` está vacía, y crea un evento de
-ejemplo (abierto, tres días seguidos dentro de un mes, de 09:00 a 18:00) si
-todavía no existe ninguno; no hay que ejecutar ningún paso de carga aparte.
+ejemplo (abierto, tres días seguidos a partir de 30 días desde hoy, de 09:00 a
+18:00) si todavía no existe ninguno; no hay que ejecutar ningún paso de carga aparte.
+
+### Pruebas
+
+Las pruebas del backend son de integración y corren contra un PostgreSQL real,
+el que indique `DATABASE_URL` (aplican las migraciones de
+`apps/backend/migrations/` por su cuenta). Vacían las tablas entre pruebas, así
+que no las apuntes a una base con datos que quieras conservar: crea una aparte.
+Con el Postgres de Docker Compose en marcha:
+
+```bash
+docker compose exec postgres createdb -U feria feria_test
+DATABASE_URL=postgresql://feria:feria@localhost:5434/feria_test npm run test
+```
+
+Las pruebas del frontend y las del paquete compartido no necesitan base de
+datos. Hoy hay 170 pruebas en el backend, 165 en el frontend y 36 en
+`packages/shared`.
+
+El flujo de CI (`.github/workflows/ci.yml`) ejecuta lint, verificación de tipos,
+compilación y pruebas en cada push y en cada pull request hacia `main`, con un
+Postgres 16 como servicio.
+
+### Otros comandos
+
+```bash
+npm run lint       # revisa el código de todos los workspaces
+npm run typecheck  # revisa los tipos de todos los workspaces
+npm run build      # compila todos los workspaces
+npm run test       # ejecuta las pruebas de todos los workspaces
+```
+
+## Funcionalidades
 
 ### Vista de administración
 
@@ -117,32 +182,10 @@ administración, que tiene dos pestañas:
   un día que ya tiene registros pide confirmación antes.
 
 Si la sesión de administración expira, el panel vuelve al inicio de sesión con
-un aviso. El panel habla con la API a través del mismo origen que el resto de
-la app:
-
-- `POST /api/admin/login` `{ key }` inicia una sesión de administración
-  (cookie), `POST /api/admin/logout` la cierra y `GET /api/admin/me` indica si
-  hay una activa. El inicio de sesión está limitado a 5 intentos por minuto por
-  IP.
-- `GET /api/admin/registrations`: JSON paginado (`limit`/`offset`), filtrable
-  con `q` (nombre, apellidos o email, sin distinguir mayúsculas ni acentos) y
-  `day` (`YYYY-MM-DD`, hora de Guatemala).
-- `GET /api/admin/registrations.csv`: los mismos datos en CSV, con los mismos
-  filtros.
-- `GET /api/admin/stats`: confirmaciones por día, los cinco ítems más
-  solicitados, cuántos borradores siguen abiertos y cuántos registros
-  confirmados quedan fuera de las fechas del evento.
-- `DELETE /api/admin/registrations/:id`: elimina un registro confirmado y sus
-  ítems (los borradores nunca se eliminan desde aquí).
-- `POST /api/admin/registrations/delete-out-of-window` `{ expectedCount }`:
-  elimina los registros confirmados cuya visita queda fuera de las fechas del
-  evento, pero solo si hay exactamente `expectedCount`; de lo contrario responde
-  `409` y no elimina nada.
-- `GET /api/admin/event` y `PUT /api/admin/event`: leen y reemplazan la
-  configuración del evento (ver más abajo).
-
-Todas las rutas de administración aceptan esa sesión o, para scripts, una
-cabecera `x-admin-key` igual a `ADMIN_API_KEY`.
+un aviso. El panel sigue el mismo camino que el resto de la app: `POST
+/api/admin/login` inicia una sesión de administración y cada solicitud posterior
+lee de Postgres los registros confirmados, las estadísticas y la configuración
+del evento a través del mismo proxy (rutas en la sección API).
 
 ### Fechas del evento
 
@@ -163,11 +206,11 @@ nunca se modifican ni se eliminan.
 
 ### Manejo de sesiones
 
-- **Sesión anónima con autoguardado.** Un visitante recibe una cookie de sesión
-  `httpOnly` (24 horas, renovada con la actividad) respaldada por Postgres la
-  primera vez que se guarda algo (ver Mantenimiento). El formulario se guarda
-  solo mientras se llena y queda ligado a esa sesión, así que cerrar la pestaña
-  o recargar devuelve el registro con el aviso "continuamos tu registro". Cada
+- **Sesión anónima con autoguardado.** La cookie de sesión `httpOnly` (24
+  horas, renovada con la actividad) se emite la primera vez que el visitante
+  guarda algo (ver Mantenimiento), y la sesión se almacena en Postgres. El
+  formulario se guarda solo mientras se llena y queda ligado a esa sesión, así
+  que cerrar la pestaña o recargar devuelve el registro con el aviso "continuamos tu registro". Cada
   guardado lleva el formulario completo, de modo que si la sesión expira a
   medias, el siguiente guardado reconstruye el borrador en una sesión nueva.
 - **Un solo origen, `SameSite=Lax`.** El navegador solo habla con el dominio del
@@ -196,7 +239,7 @@ nunca se modifican ni se eliminan.
   cubre a todos. Los borradores sin confirmar de más de 7 días se eliminan al
   arrancar y cada 6 horas; la tabla `session` se limpia sola.
 
-### Flujo de un registro
+## Flujo de un registro
 
 ```mermaid
 sequenceDiagram
@@ -232,16 +275,109 @@ conocido: no hay forma de editar un registro confirmado, así que quien eligió
 mal el horario no puede volver a confirmar con el mismo email (ver próximos
 pasos).
 
-El panel de administración sigue el mismo camino: `POST /api/admin/login` inicia
-una sesión de administración y cada solicitud posterior lee de Postgres los
-registros confirmados, las estadísticas y la configuración del evento a través
-del mismo proxy.
+## Modelo de datos
 
-Las solicitudes que la API no puede procesar se responden en JSON, nunca con un
-stack trace: un cuerpo mal formado es `400 { "error": "invalid_json" }`, un
+```mermaid
+erDiagram
+  catalog_items ||--o{ registration_items : "se elige en"
+  registrations ||--o{ registration_items : "contiene"
+  session ||..o| registrations : "sid = session_id"
+
+  catalog_items {
+    uuid id PK
+    catalog_item_type type "service | product"
+    text name
+    int price_cents
+    boolean active
+  }
+  registrations {
+    uuid id PK
+    text session_id UK
+    registration_status status "draft | confirmed"
+    text nombre
+    text apellidos
+    text email
+    timestamptz attend_at
+    numeric service_discount_pct
+    numeric product_discount_pct
+    timestamptz confirmed_at
+  }
+  registration_items {
+    uuid registration_id PK, FK
+    uuid catalog_item_id PK, FK
+    int price_cents_snapshot
+  }
+  session {
+    varchar sid PK
+    json sess
+    timestamp expire
+  }
+  event_settings {
+    smallint id PK "siempre 1"
+    text name
+    text location
+    smallint slot_minutes "15, 30 o 60"
+    boolean registration_open
+  }
+  event_days {
+    date day PK
+    time opens_at
+    time closes_at
+  }
+```
+
+Las tablas salen de las migraciones en `apps/backend/migrations/`; `session` la
+crea `connect-pg-simple` al arrancar. Solo se muestran las columnas necesarias
+para entender el diseño.
+
+PostgreSQL encaja bien porque el dominio es relacional (registros, ítems y
+catálogo) y porque confirmar necesita transacciones y bloqueos: la regla de un
+registro confirmado por email se serializa con un bloqueo consultivo dentro de
+la transacción de confirmación. Cada fila de `registration_items` guarda el
+precio del momento (`price_cents_snapshot`), así que un cambio posterior en el
+catálogo no altera confirmaciones pasadas. El borrador es la misma fila de
+`registrations` con `status = 'draft'`, ligada al id de la sesión mediante
+`session_id`; al confirmar solo cambia su estado. Por último, el evento es
+configuración en la base de datos (`event_settings` y `event_days`) y no código:
+el administrador cambia las fechas desde el panel sin volver a desplegar.
+
+## API
+
+### Rutas de administración
+
+Todas cuelgan de `/api/admin`:
+
+- `POST /api/admin/login` `{ key }` inicia una sesión de administración
+  (cookie), `POST /api/admin/logout` la cierra y `GET /api/admin/me` indica si
+  hay una activa. El inicio de sesión está limitado a 5 intentos por minuto por
+  IP.
+- `GET /api/admin/registrations`: JSON paginado (`limit`/`offset`), filtrable
+  con `q` (nombre, apellidos o email, sin distinguir mayúsculas ni acentos) y
+  `day` (`YYYY-MM-DD`, hora de Guatemala).
+- `GET /api/admin/registrations.csv`: los mismos datos en CSV, con los mismos
+  filtros.
+- `GET /api/admin/stats`: confirmaciones por día, los cinco ítems más
+  solicitados, cuántos borradores siguen abiertos y cuántos registros
+  confirmados quedan fuera de las fechas del evento.
+- `DELETE /api/admin/registrations/:id`: elimina un registro confirmado y sus
+  ítems (los borradores nunca se eliminan desde aquí).
+- `POST /api/admin/registrations/delete-out-of-window` `{ expectedCount }`:
+  elimina los registros confirmados cuya visita queda fuera de las fechas del
+  evento, pero solo si hay exactamente `expectedCount`; de lo contrario responde
+  `409` y no elimina nada.
+- `GET /api/admin/event` y `PUT /api/admin/event`: leen y reemplazan la
+  configuración del evento (ver Fechas del evento).
+
+Todas las rutas de administración aceptan esa sesión o, para scripts, una
+cabecera `x-admin-key` igual a `ADMIN_API_KEY`.
+
+### Manejo de errores
+
+Las solicitudes que la API no puede procesar se responden en JSON, nunca con el
+detalle interno del fallo: un cuerpo mal formado es `400 { "error": "invalid_json" }`, un
 cuerpo de más de 100 KB es `413 { "error": "payload_too_large" }` y una ruta
 bajo `/api` que no existe es `404 { "error": "not_found" }`. Solo los fallos
-realmente inesperados responden `500` y se registran en el log.
+realmente inesperados responden `500` y se registran en los logs del servidor.
 
 ### Límites de solicitudes
 
@@ -268,7 +404,7 @@ respuestas de `/api` reenviadas por el proxy conservan las cabeceras de la API.
 Cualquier cosa que cargue un script, una fuente o una imagen desde otro host
 requiere ampliar antes la política en `apps/frontend/server.mjs`.
 
-### Decisiones de arquitectura
+## Decisiones de arquitectura
 
 **Monorepo con un paquete compartido.** `packages/shared` contiene las reglas
 de descuento y los tipos de solicitud/respuesta de ambas apps. El frontend
@@ -295,11 +431,11 @@ cookie `SameSite=None` entre ellos se trata como de terceros y la bloquean
 Safari y las ventanas privadas.
 
 **Dinero en centavos enteros.** Los precios y totales se guardan y calculan en
-centavos enteros de principio a fin, y solo se formatean como `Q123.45` en el
-borde de la interfaz. Así se evita la deriva de redondeo propia de la aritmética
+centavos enteros de principio a fin, y solo se formatean como `Q123.45` al
+mostrarse. Así se evitan los errores de redondeo propios de la aritmética
 de moneda con punto flotante, en particular al aplicar un descuento porcentual.
 
-### Despliegue en Railway
+## Despliegue en Railway
 
 El proyecto tiene tres servicios: el plugin gestionado de Postgres, `backend` y
 `frontend`, cada uno construido desde su propio Dockerfile
@@ -307,8 +443,9 @@ El proyecto tiene tres servicios: el plugin gestionado de Postgres, `backend` y
 repositorio como contexto de construcción).
 
 1. **backend**: define `DATABASE_URL` (referencia al plugin de Postgres),
-   `SESSION_SECRET`, `NODE_ENV=production`, `PORT=4000` y, opcionalmente,
-   `ADMIN_API_KEY`. No necesita dominio público: el frontend lo alcanza por la
+   `SESSION_SECRET`, `NODE_ENV=production`, `PORT=4000` (se fija a mano, en vez
+   de usar el puerto que asigna Railway, para que `API_PROXY_TARGET` del
+   frontend apunte a un puerto conocido) y, opcionalmente, `ADMIN_API_KEY`. No necesita dominio público: el frontend lo alcanza por la
    red privada de Railway.
 2. **frontend**: define `PORT=4173` y `API_PROXY_TARGET` con la dirección
    privada del backend, por ejemplo `http://backend.railway.internal:4000`. Solo
@@ -318,7 +455,7 @@ repositorio como contexto de construcción).
    `TRUST_PROXY_HOPS=1` del backend es el correcto. Auméntalo solo si se añade
    otro proxy delante del frontend.
 
-### Próximos pasos
+## Próximos pasos
 
 El catálogo de servicios y productos se carga en el primer arranque y se cambia
 directamente en la base de datos. Gestionarlo desde el panel de administración
@@ -326,12 +463,3 @@ directamente en la base de datos. Gestionarlo desde el panel de administración
 los correos de confirmación. Permitir que un cliente modifique o cancele su
 registro confirmado (por ejemplo, para elegir otro turno) es otro, ya que la
 regla de un registro por email hoy no le deja forma de corregir un error.
-
-### Otros comandos
-
-```bash
-npm run lint       # revisa el código de todos los workspaces
-npm run typecheck  # revisa los tipos de todos los workspaces
-npm run build      # compila todos los workspaces
-npm run test       # ejecuta las pruebas de todos los workspaces
-```
