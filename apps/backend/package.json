@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:express --external:cors --external:pg --external:express-session --external:connect-pg-simple --external:express-rate-limit --external:dotenv --external:zod",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:express --external:cors --external:pg --external:express-session --external:connect-pg-simple --external:express-rate-limit --external:helmet --external:dotenv --external:zod",
     "start": "node dist/index.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -20,6 +20,7 @@
     "express": "^4.22.3",
     "express-rate-limit": "^7.4.1",
     "express-session": "^1.18.1",
+    "helmet": "^8.3.0",
     "pg": "^8.13.0",
     "zod": "^3.24.1"
   },

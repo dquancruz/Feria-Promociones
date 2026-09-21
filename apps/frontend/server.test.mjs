@@ -80,6 +80,27 @@ describe('frontend server', () => {
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     });
 
+    it('sends the security headers with the page and with the assets', async () => {
+      for (const url of [`${base}/`, `${base}/admin`, `${base}/assets/app-abc123.js`]) {
+        const response = await fetch(url);
+
+        expect(response.headers.get('x-frame-options'), url).toBe('DENY');
+        expect(response.headers.get('referrer-policy'), url).toBe('same-origin');
+        expect(response.headers.get('x-content-type-options'), url).toBe('nosniff');
+        expect(response.headers.get('content-security-policy'), url).toBe(
+          "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; " +
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        );
+      }
+    });
+
+    it('sends the security headers on a static 404 too', async () => {
+      const response = await fetch(`${base}/assets/old-bundle.js`);
+
+      expect(response.status).toBe(404);
+      expect(response.headers.get('x-frame-options')).toBe('DENY');
+    });
+
     it('falls back to index.html for client-side routes', async () => {
       const response = await fetch(`${base}/admin`);
 
@@ -146,6 +167,17 @@ describe('frontend server', () => {
       expect(lastUpstreamRequest.headers.host).not.toBe(new URL(base).host);
       expect(lastUpstreamRequest.headers['x-forwarded-for']).toBe('203.0.113.7');
       expect(lastUpstreamRequest.headers['x-forwarded-proto']).toBe('https');
+    });
+
+    it('leaves proxied responses with whatever headers the backend set', async () => {
+      const api = await fetch(`${base}/api/echo`);
+      const health = await fetch(`${base}/health`);
+
+      for (const response of [api, health]) {
+        expect(response.headers.get('content-security-policy')).toBeNull();
+        expect(response.headers.get('x-frame-options')).toBeNull();
+        expect(response.headers.get('referrer-policy')).toBeNull();
+      }
     });
 
     it('forwards the health endpoints', async () => {
