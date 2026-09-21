@@ -302,7 +302,24 @@ describe('admin event settings, filters and stats', () => {
     it('is empty when nothing has happened', async () => {
       const { body } = await get('/api/admin/stats');
 
-      expect(body).toEqual({ confirmedTotal: 0, byDay: [], topItems: [], draftsStarted: 0 });
+      expect(body).toEqual({ confirmedTotal: 0, byDay: [], topItems: [], draftsStarted: 0, outOfWindowCount: 0 });
+    });
+
+    it('counts confirmed registrations whose visit is outside the event dates', async () => {
+      await insertConfirmed({ nombre: 'A', email: 'a@example.com', attendAt: testAttendAt('10:00') });
+      await insertConfirmed({
+        nombre: 'B',
+        email: 'b@example.com',
+        attendAt: toAttendAtIso(addDays(TEST_EVENT_FIRST_DAY, 60), '10:00'),
+      });
+      // A draft with a stray date is somebody's form in progress, not a registration.
+      await pool.query(`INSERT INTO registrations (session_id, attend_at) VALUES ('draft-far', $1)`, [
+        toAttendAtIso(addDays(TEST_EVENT_FIRST_DAY, 90), '10:00'),
+      ]);
+
+      const { body } = await get('/api/admin/stats');
+
+      expect(body.outOfWindowCount).toBe(1);
     });
 
     it('summarizes confirmations per day, the most requested items and open drafts', async () => {

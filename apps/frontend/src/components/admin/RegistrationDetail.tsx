@@ -6,6 +6,7 @@ import { formatVisit } from './format';
 interface RegistrationDetailProps {
   registration: AdminRegistration;
   onClose: () => void;
+  onDelete: () => void;
 }
 
 function ItemGroup({ title, items }: { title: string; items: AdminRegistrationItem[] }) {
@@ -26,7 +27,7 @@ function ItemGroup({ title, items }: { title: string; items: AdminRegistrationIt
 }
 
 /** Side panel with everything about one confirmed registration, so the portfolio can be prepared from it. */
-export function RegistrationDetail({ registration, onClose }: RegistrationDetailProps) {
+export function RegistrationDetail({ registration, onClose, onDelete }: RegistrationDetailProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -89,6 +90,10 @@ export function RegistrationDetail({ registration, onClose }: RegistrationDetail
           <dd className="price">{formatAmount(registration.grandTotal)}</dd>
         </div>
       </dl>
+
+      <button type="button" className="danger-outline" onClick={onDelete}>
+        Eliminar registro
+      </button>
     </aside>
   );
 }

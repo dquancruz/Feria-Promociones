@@ -1,14 +1,25 @@
 import type { AdminRegistration, AdminRegistrationsResponse, AdminStats } from '@feria/shared';
 import { useEffect, useState } from 'react';
-import { adminCsvUrl, fetchAdminEvent, fetchAdminRegistrations, fetchAdminStats } from '../../api/adminClient';
+import {
+  adminCsvUrl,
+  deleteAdminRegistration,
+  deleteOutOfWindowRegistrations,
+  fetchAdminEvent,
+  fetchAdminRegistrations,
+  fetchAdminStats,
+} from '../../api/adminClient';
+import { ApiError } from '../../api/client';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatAmount } from '../../utils/currency';
 import { formatDayChip } from '../../utils/eventFormat';
+import { DeleteDialog } from './DeleteDialog';
 import { formatVisit } from './format';
 import { RegistrationDetail } from './RegistrationDetail';
 import { StatsCards } from './StatsCards';
 
 const PAGE_SIZE = 20;
+
+type Deleting = { kind: 'one'; registration: AdminRegistration } | { kind: 'outOfWindow'; count: number };
 
 interface RegistrationsTabProps {
   /** Returns true when the error was a lost session and the parent has dealt with it. */
@@ -26,6 +37,11 @@ export function RegistrationsTab({ onError }: RegistrationsTabProps) {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminRegistration | null>(null);
   const [reload, setReload] = useState(0);
+  const [statsReload, setStatsReload] = useState(0);
+  const [deleting, setDeleting] = useState<Deleting | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const q = useDebouncedValue(search.trim(), 300);
 
@@ -49,7 +65,7 @@ export function RegistrationsTab({ onError }: RegistrationsTabProps) {
     return () => {
       cancelled = true;
     };
-  }, [onError]);
+  }, [onError, statsReload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +92,46 @@ export function RegistrationsTab({ onError }: RegistrationsTabProps) {
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + PAGE_SIZE, total);
   const filtering = Boolean(q || day);
+  const outOfWindowCount = stats?.outOfWindowCount ?? 0;
+
+  function closeDelete() {
+    setDeleting(null);
+    setDeleteError(null);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      if (deleting.kind === 'one') {
+        await deleteAdminRegistration(deleting.registration.confirmationId);
+        setNotice('Registro eliminado.');
+      } else {
+        const { deleted } = await deleteOutOfWindowRegistrations(deleting.count);
+        setNotice(deleted === 1 ? '1 registro eliminado.' : `${deleted} registros eliminados.`);
+      }
+      setSelected(null);
+      closeDelete();
+      setStatsReload((n) => n + 1);
+      setReload((n) => n + 1);
+    } catch (err) {
+      if (onError(err)) return;
+      if (err instanceof ApiError && err.status === 409) {
+        setDeleteError('La cantidad cambió mientras revisabas. No se eliminó nada; revisa los registros e intenta de nuevo.');
+        setStatsReload((n) => n + 1);
+        setReload((n) => n + 1);
+      } else if (err instanceof ApiError && err.status === 404) {
+        setDeleteError('Ese registro ya no existe.');
+        setStatsReload((n) => n + 1);
+        setReload((n) => n + 1);
+      } else {
+        setDeleteError('No se pudo eliminar. Intenta de nuevo.');
+      }
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   return (
     <div className="admin-section">
@@ -84,10 +140,27 @@ export function RegistrationsTab({ onError }: RegistrationsTabProps) {
       <section className="panel admin-list" aria-labelledby="registrations-heading">
         <div className="admin-toolbar">
           <h2 id="registrations-heading">Registros confirmados</h2>
-          <a className="secondary-button" href={adminCsvUrl({ q: q || undefined, day: day || undefined })}>
-            Descargar CSV
-          </a>
+          <div className="admin-toolbar-actions">
+            {outOfWindowCount > 0 && (
+              <button
+                type="button"
+                className="danger-outline"
+                onClick={() => setDeleting({ kind: 'outOfWindow', count: outOfWindowCount })}
+              >
+                Eliminar registros fuera de fechas ({outOfWindowCount})
+              </button>
+            )}
+            <a className="secondary-button" href={adminCsvUrl({ q: q || undefined, day: day || undefined })}>
+              Descargar CSV
+            </a>
+          </div>
         </div>
+
+        {notice && (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        )}
 
         <div className="admin-filters">
           <div className="field">
@@ -198,7 +271,42 @@ export function RegistrationsTab({ onError }: RegistrationsTabProps) {
         )}
       </section>
 
-      {selected && <RegistrationDetail registration={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <RegistrationDetail
+          registration={selected}
+          // Escape belongs to the confirmation dialog while it is open.
+          onClose={deleting ? () => undefined : () => setSelected(null)}
+          onDelete={() => setDeleting({ kind: 'one', registration: selected })}
+        />
+      )}
+
+      {deleting && (
+        <DeleteDialog
+          title={deleting.kind === 'one' ? 'Eliminar este registro' : 'Eliminar registros fuera de fechas'}
+          confirmLabel={deleting.kind === 'one' ? 'Eliminar registro' : `Eliminar ${deleting.count}`}
+          csvHref={adminCsvUrl({})}
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={() => void handleConfirmDelete()}
+          onCancel={closeDelete}
+        >
+          {deleting.kind === 'one' ? (
+            <p>
+              Vas a eliminar el registro de{' '}
+              <strong>
+                {deleting.registration.nombre} {deleting.registration.apellidos}
+              </strong>{' '}
+              ({deleting.registration.email}). Su email quedará libre para registrarse de nuevo.
+            </p>
+          ) : (
+            <p>
+              Vas a eliminar <strong>{deleting.count}</strong>{' '}
+              {deleting.count === 1 ? 'registro confirmado cuya visita' : 'registros confirmados cuya visita'} ya no
+              cae en los días de la feria.
+            </p>
+          )}
+        </DeleteDialog>
+      )}
     </div>
   );
 }

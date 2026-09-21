@@ -21,6 +21,7 @@ const STATS: AdminStats = {
   byDay: [{ date: '2026-11-12', count: 2 }],
   topItems: [{ name: 'Diagnóstico de suelo', type: 'service', count: 2 }],
   draftsStarted: 1,
+  outOfWindowCount: 1,
 };
 
 const REGISTRATION: AdminRegistration = {
@@ -49,6 +50,10 @@ interface Options {
   registrationsError?: string;
   outOfWindowCount?: number;
   registration?: AdminRegistration;
+  /** What the stats report as registrations outside the event dates. */
+  statsOutOfWindow?: number;
+  /** Status the API answers a delete with; anything else than success is an error. */
+  deleteStatus?: number;
 }
 
 type Call = { method: string; url: string; body?: unknown };
@@ -56,6 +61,12 @@ type Call = { method: string; url: string; body?: unknown };
 function installAdminFetch(options: Options = {}) {
   const calls: Call[] = [];
   let isAdmin = options.isAdmin ?? true;
+  let registrations = [options.registration ?? REGISTRATION];
+  let stats = { ...STATS, outOfWindowCount: options.statsOutOfWindow ?? STATS.outOfWindowCount };
+  const afterDelete = () => {
+    registrations = [];
+    stats = { ...STATS, confirmedTotal: 0, byDay: [], topItems: [], outOfWindowCount: 0 };
+  };
 
   const json = (status: number, body: unknown) =>
     Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
@@ -75,7 +86,17 @@ function installAdminFetch(options: Options = {}) {
       isAdmin = false;
       return Promise.resolve(new Response(null, { status: 204 }));
     }
-    if (url === '/api/admin/stats') return json(200, STATS);
+    if (method === 'DELETE' && url.startsWith('/api/admin/registrations/')) {
+      if (options.deleteStatus) return json(options.deleteStatus, { error: 'not_found' });
+      afterDelete();
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (method === 'POST' && url === '/api/admin/registrations/delete-out-of-window') {
+      if (options.deleteStatus === 409) return json(409, { error: 'count_changed', count: 3 });
+      afterDelete();
+      return json(200, { deleted: 1 });
+    }
+    if (url === '/api/admin/stats') return json(200, stats);
     if (url === '/api/admin/event' && method === 'GET') return json(200, EVENT);
     if (url === '/api/admin/event' && method === 'PUT') {
       const saved = JSON.parse(String(init?.body));
@@ -85,7 +106,7 @@ function installAdminFetch(options: Options = {}) {
       if (options.registrationsStatus && options.registrationsStatus !== 200) {
         return json(options.registrationsStatus, { error: options.registrationsError });
       }
-      return json(200, { registrations: [options.registration ?? REGISTRATION], total: 1, limit: 20, offset: 0 });
+      return json(200, { registrations, total: registrations.length, limit: 20, offset: 0 });
     }
     return json(404, {});
   });
@@ -243,5 +264,123 @@ describe('event tab', () => {
 
     expect(await screen.findByText('El cierre debe ser posterior a la apertura')).toBeInTheDocument();
     expect(calls.some((call) => call.method === 'PUT')).toBe(false);
+  });
+});
+
+describe('deleting registrations', () => {
+  const deleteCalls = (calls: Call[]) => calls.filter((call) => call.method === 'DELETE');
+  const typeWord = async (user: ReturnType<typeof userEvent.setup>, dialog: HTMLElement, word: string) =>
+    user.type(within(dialog).getByLabelText(/Escribe «eliminar»/), word);
+
+  async function openDeleteDialog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: 'Carla Méndez' }));
+    await user.click(screen.getByRole('button', { name: 'Eliminar registro' }));
+    return screen.getByRole('alertdialog');
+  }
+
+  it('asks the admin to type a word before the delete button works', async () => {
+    const user = userEvent.setup();
+    installAdminFetch();
+    render(<AdminApp />);
+    const dialog = await openDeleteDialog(user);
+
+    const confirm = within(dialog).getByRole('button', { name: 'Eliminar registro' });
+    expect(confirm).toBeDisabled();
+    expect(dialog).toHaveTextContent('Carla Méndez');
+    expect(within(dialog).getByRole('link', { name: 'Descarga el CSV antes' })).toHaveAttribute(
+      'href',
+      '/api/admin/registrations.csv',
+    );
+
+    await typeWord(user, dialog, 'elimin');
+    expect(confirm).toBeDisabled();
+    await typeWord(user, dialog, 'ar');
+    expect(confirm).toBeEnabled();
+  });
+
+  it('deletes the registration once confirmed, and refreshes the list and the counters', async () => {
+    const user = userEvent.setup();
+    const { calls } = installAdminFetch();
+    render(<AdminApp />);
+    const dialog = await openDeleteDialog(user);
+
+    await typeWord(user, dialog, 'Eliminar');
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar registro' }));
+
+    expect(await screen.findByText('Registro eliminado.')).toBeInTheDocument();
+    expect(deleteCalls(calls).map((call) => call.url)).toEqual([
+      `/api/admin/registrations/${REGISTRATION.confirmationId}`,
+    ]);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(await screen.findByText('Todavía no hay registros confirmados.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Detalle de Carla Méndez' })).not.toBeInTheDocument();
+  });
+
+  it('does nothing when the admin cancels', async () => {
+    const user = userEvent.setup();
+    const { calls } = installAdminFetch();
+    render(<AdminApp />);
+    const dialog = await openDeleteDialog(user);
+
+    await typeWord(user, dialog, 'eliminar');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(deleteCalls(calls)).toHaveLength(0);
+    expect(screen.getByRole('table')).toHaveTextContent('Carla Méndez');
+  });
+
+  it('says so when the registration was already gone', async () => {
+    const user = userEvent.setup();
+    installAdminFetch({ deleteStatus: 404 });
+    render(<AdminApp />);
+    const dialog = await openDeleteDialog(user);
+
+    await typeWord(user, dialog, 'eliminar');
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar registro' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Ese registro ya no existe.');
+  });
+
+  it('offers the bulk delete only when some registrations are outside the event dates', async () => {
+    installAdminFetch({ statsOutOfWindow: 0 });
+    render(<AdminApp />);
+
+    await screen.findByRole('table');
+
+    expect(screen.queryByRole('button', { name: /Eliminar registros fuera de fechas/ })).not.toBeInTheDocument();
+  });
+
+  it('deletes the registrations outside the event dates, sending the number it showed', async () => {
+    const user = userEvent.setup();
+    const { calls } = installAdminFetch();
+    render(<AdminApp />);
+
+    await user.click(await screen.findByRole('button', { name: 'Eliminar registros fuera de fechas (1)' }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Vas a eliminar 1 registro confirmado');
+    await typeWord(user, dialog, 'eliminar');
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar 1' }));
+
+    expect(await screen.findByText('1 registro eliminado.')).toBeInTheDocument();
+    const bulk = calls.find((call) => call.url === '/api/admin/registrations/delete-out-of-window');
+    expect(bulk?.body).toEqual({ expectedCount: 1 });
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Eliminar registros fuera de fechas/ })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('deletes nothing and explains it when the number changed in the meantime', async () => {
+    const user = userEvent.setup();
+    installAdminFetch({ deleteStatus: 409 });
+    render(<AdminApp />);
+
+    await user.click(await screen.findByRole('button', { name: 'Eliminar registros fuera de fechas (1)' }));
+    const dialog = screen.getByRole('alertdialog');
+    await typeWord(user, dialog, 'eliminar');
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar 1' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('La cantidad cambió');
+    expect(screen.queryByText('1 registro eliminado.')).not.toBeInTheDocument();
   });
 });

@@ -14,3 +14,16 @@ export class RegistrationClosedError extends Error {
     this.name = 'RegistrationClosedError';
   }
 }
+
+// The request was understood but the data is no longer what the caller expected.
+export class ConflictError extends Error {
+  readonly code: string;
+  readonly actualCount: number;
+
+  constructor(code: string, actualCount: number) {
+    super(code);
+    this.name = 'ConflictError';
+    this.code = code;
+    this.actualCount = actualCount;
+  }
+}

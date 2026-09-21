@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
-import { RegistrationClosedError, ValidationError } from '../errors.js';
+import { ConflictError, RegistrationClosedError, ValidationError } from '../errors.js';
 
 // Express only treats a 4-arg function as error-handling middleware; `next` must stay.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -19,6 +19,15 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(403).json({
       error: 'registration_closed',
       message: 'El registro no está disponible por el momento.',
+    });
+    return;
+  }
+
+  if (err instanceof ConflictError) {
+    res.status(409).json({
+      error: err.code,
+      message: 'La cantidad cambió mientras revisabas. Revisa los registros e intenta de nuevo.',
+      count: err.actualCount,
     });
     return;
   }

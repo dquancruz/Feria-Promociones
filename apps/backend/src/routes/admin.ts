@@ -1,8 +1,15 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { adminLoginSchema, adminRegistrationFiltersSchema, eventSettingsInputSchema } from '@feria/shared';
+import {
+  adminDeleteOutOfWindowSchema,
+  adminLoginSchema,
+  adminRegistrationFiltersSchema,
+  eventSettingsInputSchema,
+  type AdminDeleteResult,
+} from '@feria/shared';
 import { Router, type Request, type RequestHandler } from 'express';
 import rateLimit from 'express-rate-limit';
 import type { Pool } from 'pg';
+import { z } from 'zod';
 import { config } from '../config.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import * as admin from '../services/admin.js';
@@ -208,6 +215,32 @@ export function createAdminRouter(pool: Pool, options: AdminRouterOptions = {}):
         .type('text/csv')
         .set('Content-Disposition', 'attachment; filename="registros.csv"')
         .send(csv);
+    }),
+  );
+
+  // Registered before the /:id route so "delete-out-of-window" is never read as an id.
+  router.post(
+    '/registrations/delete-out-of-window',
+    asyncHandler(async (req, res) => {
+      const { expectedCount } = adminDeleteOutOfWindowSchema.parse(req.body);
+      const result: AdminDeleteResult = { deleted: await admin.deleteOutOfWindowRegistrations(pool, expectedCount) };
+      res.json(result);
+    }),
+  );
+
+  router.delete(
+    '/registrations/:id',
+    asyncHandler(async (req, res) => {
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!id.success) {
+        res.status(400).json({ error: 'invalid_id' });
+        return;
+      }
+      if (!(await admin.deleteConfirmedRegistration(pool, id.data))) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      res.status(204).end();
     }),
   );
 

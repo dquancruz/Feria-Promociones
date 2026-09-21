@@ -1,4 +1,5 @@
 import type {
+  AdminDeleteResult,
   AdminRegistrationFilters,
   AdminRegistrationsResponse,
   AdminStats,
@@ -91,4 +92,16 @@ export function fetchAdminEvent(): Promise<EventSettings> {
 
 export function saveAdminEvent(input: EventSettingsInput): Promise<EventUpdateResult> {
   return adminRequest('/api/admin/event', { method: 'PUT', body: JSON.stringify(input) });
+}
+
+export async function deleteAdminRegistration(id: string): Promise<void> {
+  await adminRequest(`/api/admin/registrations/${id}`, { method: 'DELETE' });
+}
+
+/** `expectedCount` is the number the admin was shown: the API deletes nothing (409) if it differs. */
+export function deleteOutOfWindowRegistrations(expectedCount: number): Promise<AdminDeleteResult> {
+  return adminRequest('/api/admin/registrations/delete-out-of-window', {
+    method: 'POST',
+    body: JSON.stringify({ expectedCount }),
+  });
 }
