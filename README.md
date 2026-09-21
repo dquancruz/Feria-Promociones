@@ -210,6 +210,16 @@ sequenceDiagram
   B-->>C: Confirmation with items, discounts and savings
 ```
 
+**One confirmed registration per email.** Confirming with an email that already
+has a confirmed registration is rejected with `400` and the message "Este email
+ya tiene una asistencia confirmada." (a field error on `email`). The comparison
+ignores capital letters and surrounding spaces, so `ANA@Example.com` is the same
+address as `ana@example.com`. The rule keeps the fair from ending up with
+duplicate registrations for the same person, and two simultaneous confirmations
+for one email are serialized so only one gets through. It has a known cost:
+there is no way to edit a confirmed registration, so someone who picked the
+wrong time slot can't confirm again with the same email (see next steps).
+
 The admin panel follows the same path: `POST /api/admin/login` starts an admin
 session and every later request reads the confirmed registrations, the stats
 and the event settings from Postgres through the same proxy.
@@ -285,6 +295,9 @@ The project has three services: the managed Postgres plugin, `backend` and
 The catalog of services and products is seeded on first start and changed
 directly in the database. Managing it from the admin panel (create, edit and
 deactivate items) is the natural next step, as are confirmation emails.
+Letting a client change or cancel their confirmed registration (for example
+to pick another time slot) is another, since the one-registration-per-email
+rule currently leaves them no way to fix a mistake.
 
 ### Other commands
 
