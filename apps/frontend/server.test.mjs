@@ -108,6 +108,13 @@ describe('frontend server', () => {
       expect(await response.text()).toContain('id="root"');
     });
 
+    it('serves the SPA for /admin/ with a trailing slash as well', async () => {
+      const response = await fetch(`${base}/admin/`);
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('id="root"');
+    });
+
     it('answers 404 for a missing asset instead of returning HTML', async () => {
       const response = await fetch(`${base}/assets/old-bundle.js`);
 
