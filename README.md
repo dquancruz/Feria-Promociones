@@ -8,6 +8,25 @@ de modo que se pueda preparar un portafolio de promociones personalizado para
 cada cliente confirmado. Los descuentos según el interés se calculan
 automáticamente y se muestran al cliente antes de confirmar.
 
+## Reglas de descuento
+
+| Categoría | Condición | Descuento |
+| --- | --- | --- |
+| Servicios | 2 o más servicios | 3 % |
+| Servicios | 2 o más servicios y suma mayor a Q1,500 | 5 % |
+| Productos | 3 o más productos | 3 % |
+| Productos | 5 o más productos | 5 % |
+
+Cada categoría se calcula por separado, y el descuento de servicios y el de
+productos se muestran uno junto al otro. Los dos porcentajes de servicios no se
+suman: cuando se cumple la condición del 5 %, ese reemplaza al 3 %. "Mayor a
+Q1,500" es estricto: dos servicios que suman exactamente Q1,500.00 obtienen 3 %,
+y con Q1,500.01 pasan a 5 %.
+
+El cálculo vive en `packages/shared/src/discounts.ts`. Lo usan tanto la vista
+previa del formulario como la confirmación en el backend, y
+`packages/shared/src/discounts.test.ts` cubre cada borde.
+
 ## Tecnologías
 
 - **Frontend**: React + TypeScript, compilado con Vite.
