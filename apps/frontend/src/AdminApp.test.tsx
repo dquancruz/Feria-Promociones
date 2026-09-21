@@ -48,6 +48,7 @@ interface Options {
   registrationsStatus?: number;
   registrationsError?: string;
   outOfWindowCount?: number;
+  registration?: AdminRegistration;
 }
 
 type Call = { method: string; url: string; body?: unknown };
@@ -84,7 +85,7 @@ function installAdminFetch(options: Options = {}) {
       if (options.registrationsStatus && options.registrationsStatus !== 200) {
         return json(options.registrationsStatus, { error: options.registrationsError });
       }
-      return json(200, { registrations: [REGISTRATION], total: 1, limit: 20, offset: 0 });
+      return json(200, { registrations: [options.registration ?? REGISTRATION], total: 1, limit: 20, offset: 0 });
     }
     return json(404, {});
   });
@@ -161,6 +162,17 @@ describe('registrations tab', () => {
     expect(within(detail).getByRole('heading', { name: 'Servicios' })).toBeInTheDocument();
     expect(within(detail).getByRole('heading', { name: 'Productos' })).toBeInTheDocument();
     expect(within(detail).getByText('Fertilizante 15-15-15')).toBeInTheDocument();
+  });
+
+  it('says so in the detail panel when the person chose no services or products', async () => {
+    const user = userEvent.setup();
+    installAdminFetch({ registration: { ...REGISTRATION, items: [], servicesTotal: 0, productsTotal: 0, grandTotal: 0 } });
+    render(<AdminApp />);
+
+    await user.click(await screen.findByRole('button', { name: 'Carla Méndez' }));
+
+    const detail = screen.getByRole('dialog', { name: 'Detalle de Carla Méndez' });
+    expect(within(detail).getByText('No eligió servicios ni productos.')).toBeInTheDocument();
   });
 
   it('sends the search term to the API and keeps it in the CSV link', async () => {

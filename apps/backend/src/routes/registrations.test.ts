@@ -95,8 +95,8 @@ describe('registrations draft/confirm flow', () => {
       apellidos: expect.any(String),
       email: expect.any(String),
       attendAt: expect.any(String),
-      selectedItemIds: expect.any(String),
     });
+    expect(response.body.fieldErrors).not.toHaveProperty('selectedItemIds');
   });
 
   it('confirms a valid draft, recomputing discounts and totals server-side', async () => {
@@ -123,6 +123,29 @@ describe('registrations draft/confirm flow', () => {
       grandTotal: 1665.5,
     });
     expect(response.body.confirmationId).toEqual(expect.any(String));
+  });
+
+  it('confirms a registration that chose no services or products', async () => {
+    const agent = request.agent(createApp(pool));
+    await agent.patch('/api/registrations/draft').send({
+      nombre: 'Ana',
+      apellidos: 'Lopez',
+      email: 'ana@example.com',
+      attendAt: testAttendAt(),
+    });
+
+    const response = await agent.post('/api/registrations/confirm');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      status: 'confirmed',
+      serviceDiscountPct: 0,
+      productDiscountPct: 0,
+      subtotal: 0,
+      savings: 0,
+      grandTotal: 0,
+      items: [],
+    });
   });
 
   it('describes the visit, the chosen items and the savings in the confirmation', async () => {

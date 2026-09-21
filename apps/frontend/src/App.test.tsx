@@ -316,6 +316,27 @@ describe('validation', () => {
     expect(screen.getByText('Apellidos son requeridos', { selector: '.field-error' })).toBeInTheDocument();
   });
 
+  it('lets the person confirm without choosing any service or product', async () => {
+    const user = userEvent.setup();
+    const fetchMock = installFetchMock({ event: EVENT });
+    render(<App />);
+    await fillPersonalData(user);
+    await pickVisit(user);
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar asistencia' }));
+
+    expect(fetchMock.callsTo('POST', '/api/registrations/confirm')).toHaveLength(1);
+    expect(await screen.findByRole('heading', { name: '¡Asistencia confirmada!' })).toBeInTheDocument();
+  });
+
+  it('says the selection is optional', async () => {
+    installFetchMock({ event: EVENT });
+    render(<App />);
+
+    expect(await screen.findByText('Es opcional: también puedes confirmar sin elegir nada.')).toBeInTheDocument();
+    expect(screen.queryByText(/Selecciona al menos/)).not.toBeInTheDocument();
+  });
+
   it('lists every problem in an announced summary', async () => {
     const user = userEvent.setup();
     installFetchMock({ event: EVENT });
@@ -325,8 +346,8 @@ describe('validation', () => {
     await user.click(screen.getByRole('button', { name: 'Confirmar asistencia' }));
 
     const summary = screen.getByRole('alert');
-    expect(summary).toHaveTextContent('Revisa estos 5 campos');
-    expect(within(summary).getAllByRole('button')).toHaveLength(5);
+    expect(summary).toHaveTextContent('Revisa estos 4 campos');
+    expect(within(summary).getAllByRole('button')).toHaveLength(4);
   });
 
   it('moves focus to the field when its entry in the summary is used', async () => {
@@ -531,6 +552,40 @@ describe('confirmation', () => {
     expect(within(products).getByText('Producto 1')).toBeInTheDocument();
     expect(screen.getByText('Valor con descuento').nextSibling).toHaveTextContent('Q1,525.00');
     expect(screen.getByText('Ahorro total').nextSibling).toHaveTextContent('Q80.00');
+  });
+
+  it('talks about the chosen items when there are some', async () => {
+    installFetchMock({ draft: CONFIRMED });
+    render(<App />);
+
+    expect(await screen.findByText(/Con lo que elegiste podemos preparar promociones a tu medida/)).toBeInTheDocument();
+    expect(screen.getByText('Valor con descuento')).toBeInTheDocument();
+  });
+
+  it('does not talk about a selection, nor show empty prices, when nothing was chosen', async () => {
+    installFetchMock({
+      draft: {
+        ...CONFIRMED,
+        items: [],
+        serviceDiscountPct: 0,
+        productDiscountPct: 0,
+        servicesSubtotal: 0,
+        productsSubtotal: 0,
+        subtotal: 0,
+        servicesSavings: 0,
+        productsSavings: 0,
+        savings: 0,
+        servicesTotal: 0,
+        productsTotal: 0,
+        grandTotal: 0,
+      },
+    });
+    render(<App />);
+
+    expect(await screen.findByText(/Cuando nos visites, con gusto te ayudamos/)).toBeInTheDocument();
+    expect(screen.queryByText(/lo que elegiste/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Valor con descuento')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Servicios' })).not.toBeInTheDocument();
   });
 
   it('shows a short readable code with the full confirmation id on hover', async () => {

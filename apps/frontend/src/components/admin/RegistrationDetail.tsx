@@ -69,6 +69,7 @@ export function RegistrationDetail({ registration, onClose }: RegistrationDetail
 
       <ItemGroup title="Servicios" items={registration.items.filter((item) => item.type === 'service')} />
       <ItemGroup title="Productos" items={registration.items.filter((item) => item.type === 'product')} />
+      {registration.items.length === 0 && <p className="stat-note">No eligió servicios ni productos.</p>}
 
       <dl className="detail-facts">
         <div>
