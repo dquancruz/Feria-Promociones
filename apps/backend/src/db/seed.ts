@@ -1,7 +1,7 @@
 import { addDays, todayInEventTimezone } from '@feria/shared';
 import type { Pool } from 'pg';
 
-interface SeedItem {
+export interface SeedItem {
   type: 'service' | 'product';
   name: string;
   priceCents: number;
@@ -9,20 +9,20 @@ interface SeedItem {
 
 // Prices are invented for the demo; a couple of services sit above Q.750 on purpose so
 // two of them together can cross the Q.1,500 services discount threshold live.
-const SEED_ITEMS: SeedItem[] = [
-  { type: 'service', name: 'Servicio 1 - Diagnóstico inicial', priceCents: 10_000 },
-  { type: 'service', name: 'Servicio 2 - Soporte básico', priceCents: 5_030 },
-  { type: 'service', name: 'Servicio 3 - Instalación', priceCents: 75_000 },
-  { type: 'service', name: 'Servicio 4 - Mantenimiento anual', priceCents: 90_000 },
-  { type: 'service', name: 'Servicio 5 - Consultoría premium', priceCents: 120_000 },
-  { type: 'service', name: 'Servicio 6 - Capacitación', priceCents: 30_000 },
-  { type: 'product', name: 'Producto 1', priceCents: 4_999 },
-  { type: 'product', name: 'Producto 2', priceCents: 8_050 },
-  { type: 'product', name: 'Producto 3', priceCents: 35_000 },
-  { type: 'product', name: 'Producto 4', priceCents: 50_000 },
-  { type: 'product', name: 'Producto 5', priceCents: 12_000 },
-  { type: 'product', name: 'Producto 6', priceCents: 7_525 },
-  { type: 'product', name: 'Producto 7', priceCents: 22_000 },
+export const SEED_ITEMS: SeedItem[] = [
+  { type: 'service', name: 'Diagnóstico de suelos', priceCents: 10_000 },
+  { type: 'service', name: 'Asesoría agronómica básica', priceCents: 5_030 },
+  { type: 'service', name: 'Instalación de sistema de riego', priceCents: 75_000 },
+  { type: 'service', name: 'Mantenimiento anual de riego', priceCents: 90_000 },
+  { type: 'service', name: 'Consultoría agronómica premium', priceCents: 120_000 },
+  { type: 'service', name: 'Capacitación para productores', priceCents: 30_000 },
+  { type: 'product', name: 'Semilla de maíz híbrido', priceCents: 4_999 },
+  { type: 'product', name: 'Fertilizante 15-15-15', priceCents: 8_050 },
+  { type: 'product', name: 'Kit de riego por goteo', priceCents: 35_000 },
+  { type: 'product', name: 'Bomba de agua de 1 HP', priceCents: 50_000 },
+  { type: 'product', name: 'Insecticida orgánico', priceCents: 12_000 },
+  { type: 'product', name: 'Herbicida selectivo', priceCents: 7_525 },
+  { type: 'product', name: 'Fungicida sistémico', priceCents: 22_000 },
 ];
 
 export async function seedCatalog(pool: Pool): Promise<void> {
