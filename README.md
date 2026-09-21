@@ -2,6 +2,10 @@
 
 **En línea**: https://feria-de-promociones.up.railway.app
 
+![Formulario de confirmación de asistencia con el resumen de descuentos](screenshots/formulario.png)
+
+![Panel de administración con la lista de registros confirmados](screenshots/admin.png)
+
 Plataforma web para la feria anual de promociones. Los clientes confirman su
 asistencia y eligen de antemano los servicios y/o productos que les interesan,
 de modo que se pueda preparar un portafolio de promociones personalizado para
