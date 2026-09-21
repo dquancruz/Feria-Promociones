@@ -29,6 +29,25 @@ const CONTENT_TYPES = {
 
 const PROXY_TIMEOUT_MS = 30_000;
 
+// Only for what this server itself serves; proxied /api responses carry the backend's own
+// headers. Fonts are self-hosted and the bundle has no inline scripts, so everything can
+// come from 'self'. Styles keep 'unsafe-inline' because React writes style attributes.
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'same-origin',
+  'content-security-policy': [
+    "default-src 'self'",
+    "img-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; '),
+};
+
 function isProxied(pathname) {
   return (
     pathname === '/api' ||
@@ -104,7 +123,7 @@ async function findFile(distDir, pathname) {
 
 async function serveStatic(req, res, distDir, pathname) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405, { allow: 'GET, HEAD' });
+    res.writeHead(405, { ...SECURITY_HEADERS, allow: 'GET, HEAD' });
     res.end();
     return;
   }
@@ -118,16 +137,16 @@ async function serveStatic(req, res, distDir, pathname) {
     found = await findFile(distDir, '/index.html');
   }
   if (!found) {
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.writeHead(404, { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' });
     res.end('Not found');
     return;
   }
 
   const ext = path.extname(found.file).toLowerCase();
   const headers = {
+    ...SECURITY_HEADERS,
     'content-type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
     'content-length': found.size,
-    'x-content-type-options': 'nosniff',
     // Hashed bundles never change; the HTML entry point must always be revalidated
     // so a new deploy is picked up.
     'cache-control': isAsset ? 'public, max-age=31536000, immutable' : 'no-cache',

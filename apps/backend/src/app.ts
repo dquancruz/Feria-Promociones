@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
+import helmet from 'helmet';
 import type { Pool } from 'pg';
 import { config } from './config.js';
 import { errorHandler } from './middleware/error-handler.js';
@@ -23,6 +24,21 @@ export function createApp(pool: Pool, options: AppOptions = {}): Express {
     // rate limiter's client IP would both read the proxy's own connection.
     app.set('trust proxy', config.trustProxyHops);
   }
+
+  // The API only serves JSON, so anything meant for HTML pages (script/style policies,
+  // cross-origin isolation) is off or minimal; what matters is that no response can be
+  // framed, sniffed into another type or leak the URL through the Referer header.
+  app.use(
+    helmet({
+      contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
+      crossOriginEmbedderPolicy: false,
+      crossOriginOpenerPolicy: false,
+      frameguard: { action: 'deny' },
+      referrerPolicy: { policy: 'no-referrer' },
+      // Only meaningful over HTTPS, and a local http:// dev server must never be pinned to it.
+      strictTransportSecurity: config.isProduction ? { maxAge: 15_552_000 } : false,
+    }),
+  );
 
   if (config.corsOrigin) {
     app.use(cors({ origin: config.corsOrigin, credentials: true }));

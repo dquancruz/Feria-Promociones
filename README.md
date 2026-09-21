@@ -219,6 +219,21 @@ a malformed body is `400 { "error": "invalid_json" }` and a body over 100 KB is
 exist is `404 { "error": "not_found" }`. Only genuinely unexpected failures
 answer `500` and are logged.
 
+### Security headers
+
+Both servers send them. The API (helmet) answers every response with
+`X-Frame-Options: DENY`, `Content-Security-Policy: default-src 'none';
+frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: no-referrer`, plus `Strict-Transport-Security` in production
+only. The frontend server adds `X-Frame-Options: DENY`,
+`Referrer-Policy: same-origin` and a Content-Security-Policy that only allows
+the app's own origin (scripts, self-hosted fonts, `fetch` calls and
+`data:` images; inline styles are allowed because React sets style attributes)
+to everything it serves itself — the page, `/admin` and the assets. Proxied
+`/api` responses keep the API's own headers. Anything that loads a script,
+font or image from another host needs the policy in
+`apps/frontend/server.mjs` widened first.
+
 ### Architecture decisions
 
 **Monorepo with a shared package.** `packages/shared` holds the discount rules
