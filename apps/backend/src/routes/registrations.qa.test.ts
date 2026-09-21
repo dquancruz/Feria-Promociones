@@ -190,6 +190,18 @@ describe('registrations QA regressions', () => {
       expect(rows[0].count).toBe(1);
     });
 
+    it('rejects a second confirmation with the same email, ignoring surrounding spaces', async () => {
+      const app = createApp(pool);
+      const first = await readyToConfirm(app);
+      const second = await readyToConfirm(app, { email: '  ana@example.com  ', selectedItemIds: [serviceB] });
+
+      expect((await first.post('/api/registrations/confirm')).status).toBe(200);
+      const response = await second.post('/api/registrations/confirm');
+
+      expect(response.status).toBe(400);
+      expect(response.body.fieldErrors).toEqual({ email: 'Este email ya tiene una asistencia confirmada.' });
+    });
+
     it('lets only one of two simultaneous confirmations for the same email through', async () => {
       const app = createApp(pool);
       const agents = await Promise.all([
