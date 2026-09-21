@@ -25,7 +25,7 @@ y con Q1,500.01 pasan a 5 %.
 
 El cálculo vive en `packages/shared/src/discounts.ts`. Lo usan tanto la vista
 previa del formulario como la confirmación en el backend, y
-`packages/shared/src/discounts.test.ts` cubre cada borde.
+`packages/shared/src/discounts.test.ts` cubre cada caso límite.
 
 ## Tecnologías
 
@@ -34,7 +34,7 @@ previa del formulario como la confirmación en el backend, y
 - **Base de datos**: PostgreSQL.
 - **Paquete compartido**: tipos y lógica de cálculo de descuentos comunes al
   frontend y al backend.
-- **Infraestructura**: un Docker por servicio, orquestados en local con Docker
+- **Infraestructura**: una imagen Docker por servicio, orquestados en local con Docker
   Compose y desplegados como servicios separados en la nube.
 
 Es un monorepo con npm workspaces:
@@ -74,7 +74,7 @@ cp .env.example .env
 | `DATABASE_URL` | Sí | — | Cadena de conexión a Postgres. |
 | `SESSION_SECRET` | Sí | `dev-secret` (solo fuera de producción) | Firma la cookie de sesión. |
 | `CORS_ORIGIN` | No | sin definir — no se envían cabeceras CORS | Solo para una app de navegador en otro origen que llame directamente a la API. El frontend incluido es del mismo origen (ver más abajo). |
-| `PORT` | No | `4000` (backend) / `4173` (frontend) | Railway asigna el suyo en tiempo de ejecución y tiene prioridad. |
+| `PORT` | No | `4000` (backend) / `4173` (frontend) | Railway asigna el suyo en tiempo de ejecución y tiene prioridad. En el backend se fija a mano (`PORT=4000`, ver Despliegue en Railway) para que `API_PROXY_TARGET` del frontend apunte a un puerto conocido. |
 | `TRUST_PROXY_HOPS` | No | `1` (solo en producción) | Número de proxies inversos delante del backend; sirve para leer la IP real del cliente. |
 | `ADMIN_API_KEY` | No | sin definir — las rutas de administración no se montan | Habilita `/api/admin` y la vista `/admin` (ver más abajo). |
 | `VITE_IDLE_TIMEOUT_MIN` | No | `10` | Frontend, en tiempo de compilación. Minutos de inactividad antes de que el formulario pregunte "¿Sigues ahí?". |
@@ -115,8 +115,8 @@ Esto levanta PostgreSQL, la API del backend y el frontend (en
 `http://localhost:4173`), conectados mediante las variables de entorno de
 `docker-compose.yml` y `.env`. Al arrancar, el backend carga el catálogo
 automáticamente si la tabla `catalog_items` está vacía, y crea un evento de
-ejemplo (abierto, tres días seguidos dentro de un mes, de 09:00 a 18:00) si
-todavía no existe ninguno; no hay que ejecutar ningún paso de carga aparte.
+ejemplo (abierto, tres días seguidos a partir de 30 días desde hoy, de 09:00 a
+18:00) si todavía no existe ninguno; no hay que ejecutar ningún paso de carga aparte.
 
 ### Pruebas
 
@@ -200,11 +200,11 @@ nunca se modifican ni se eliminan.
 
 ### Manejo de sesiones
 
-- **Sesión anónima con autoguardado.** Un visitante recibe una cookie de sesión
-  `httpOnly` (24 horas, renovada con la actividad) respaldada por Postgres la
-  primera vez que se guarda algo (ver Mantenimiento). El formulario se guarda
-  solo mientras se llena y queda ligado a esa sesión, así que cerrar la pestaña
-  o recargar devuelve el registro con el aviso "continuamos tu registro". Cada
+- **Sesión anónima con autoguardado.** La cookie de sesión `httpOnly` (24
+  horas, renovada con la actividad) se emite la primera vez que el visitante
+  guarda algo (ver Mantenimiento), y la sesión se almacena en Postgres. El
+  formulario se guarda solo mientras se llena y queda ligado a esa sesión, así
+  que cerrar la pestaña o recargar devuelve el registro con el aviso "continuamos tu registro". Cada
   guardado lleva el formulario completo, de modo que si la sesión expira a
   medias, el siguiente guardado reconstruye el borrador en una sesión nueva.
 - **Un solo origen, `SameSite=Lax`.** El navegador solo habla con el dominio del
@@ -367,11 +367,11 @@ cabecera `x-admin-key` igual a `ADMIN_API_KEY`.
 
 ### Manejo de errores
 
-Las solicitudes que la API no puede procesar se responden en JSON, nunca con un
-stack trace: un cuerpo mal formado es `400 { "error": "invalid_json" }`, un
+Las solicitudes que la API no puede procesar se responden en JSON, nunca con el
+detalle interno del fallo: un cuerpo mal formado es `400 { "error": "invalid_json" }`, un
 cuerpo de más de 100 KB es `413 { "error": "payload_too_large" }` y una ruta
 bajo `/api` que no existe es `404 { "error": "not_found" }`. Solo los fallos
-realmente inesperados responden `500` y se registran en el log.
+realmente inesperados responden `500` y se registran en los logs del servidor.
 
 ### Límites de solicitudes
 
@@ -425,8 +425,8 @@ cookie `SameSite=None` entre ellos se trata como de terceros y la bloquean
 Safari y las ventanas privadas.
 
 **Dinero en centavos enteros.** Los precios y totales se guardan y calculan en
-centavos enteros de principio a fin, y solo se formatean como `Q123.45` en el
-borde de la interfaz. Así se evita la deriva de redondeo propia de la aritmética
+centavos enteros de principio a fin, y solo se formatean como `Q123.45` al
+mostrarse. Así se evitan los errores de redondeo propios de la aritmética
 de moneda con punto flotante, en particular al aplicar un descuento porcentual.
 
 ## Despliegue en Railway
@@ -437,8 +437,9 @@ El proyecto tiene tres servicios: el plugin gestionado de Postgres, `backend` y
 repositorio como contexto de construcción).
 
 1. **backend**: define `DATABASE_URL` (referencia al plugin de Postgres),
-   `SESSION_SECRET`, `NODE_ENV=production`, `PORT=4000` y, opcionalmente,
-   `ADMIN_API_KEY`. No necesita dominio público: el frontend lo alcanza por la
+   `SESSION_SECRET`, `NODE_ENV=production`, `PORT=4000` (se fija a mano, en vez
+   de usar el puerto que asigna Railway, para que `API_PROXY_TARGET` del
+   frontend apunte a un puerto conocido) y, opcionalmente, `ADMIN_API_KEY`. No necesita dominio público: el frontend lo alcanza por la
    red privada de Railway.
 2. **frontend**: define `PORT=4173` y `API_PROXY_TARGET` con la dirección
    privada del backend, por ejemplo `http://backend.railway.internal:4000`. Solo
