@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { AdminAuthError, adminLogout, fetchAdminSession } from '../../api/adminClient';
 import '../../admin.css';
 import { AdminLogin } from './AdminLogin';
+import { CatalogTab } from './CatalogTab';
 import { EventTab } from './EventTab';
 import { RegistrationsTab } from './RegistrationsTab';
 
 type Session = 'checking' | 'login' | 'ready';
-type Tab = 'registros' | 'evento';
+type Tab = 'registros' | 'catalogo' | 'evento';
+
+const TAB_LABELS: Record<Tab, string> = { registros: 'Registros', catalogo: 'Catálogo', evento: 'Evento' };
 
 const EXPIRED_NOTICE = 'Tu sesión de administrador expiró.';
 
@@ -89,7 +92,7 @@ export function AdminApp() {
         {session === 'ready' && (
           <>
             <div className="tabs" role="tablist" aria-label="Secciones">
-              {(['registros', 'evento'] as const).map((name) => (
+              {(['registros', 'catalogo', 'evento'] as const).map((name) => (
                 <button
                   key={name}
                   id={`admin-tab-${name}`}
@@ -100,16 +103,14 @@ export function AdminApp() {
                   className={tab === name ? 'tab tab-active' : 'tab'}
                   onClick={() => setTab(name)}
                 >
-                  {name === 'registros' ? 'Registros' : 'Evento'}
+                  {TAB_LABELS[name]}
                 </button>
               ))}
             </div>
             <div id={`admin-panel-${tab}`} role="tabpanel" aria-labelledby={`admin-tab-${tab}`}>
-              {tab === 'registros' ? (
-                <RegistrationsTab onError={handleAuthError} />
-              ) : (
-                <EventTab onError={handleAuthError} />
-              )}
+              {tab === 'registros' && <RegistrationsTab onError={handleAuthError} />}
+              {tab === 'catalogo' && <CatalogTab onError={handleAuthError} />}
+              {tab === 'evento' && <EventTab onError={handleAuthError} />}
             </div>
           </>
         )}

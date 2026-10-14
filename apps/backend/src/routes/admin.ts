@@ -3,6 +3,8 @@ import {
   adminDeleteOutOfWindowSchema,
   adminLoginSchema,
   adminRegistrationFiltersSchema,
+  catalogItemInputSchema,
+  catalogItemUpdateSchema,
   eventSettingsInputSchema,
   type AdminDeleteResult,
 } from '@feria/shared';
@@ -13,6 +15,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import * as admin from '../services/admin.js';
+import { createCatalogItem, listAllCatalog, updateCatalogItem } from '../services/catalog.js';
 import { getEvent, replaceEvent } from '../services/event.js';
 import { toCsv } from '../utils/csv.js';
 
@@ -241,6 +244,56 @@ export function createAdminRouter(pool: Pool, options: AdminRouterOptions = {}):
         return;
       }
       res.status(204).end();
+    }),
+  );
+
+  router.get(
+    '/catalog',
+    asyncHandler(async (_req, res) => {
+      res.json({ items: await listAllCatalog(pool) });
+    }),
+  );
+
+  router.post(
+    '/catalog',
+    asyncHandler(async (req, res) => {
+      const input = catalogItemInputSchema.parse(req.body);
+      res.status(201).json(await createCatalogItem(pool, input));
+    }),
+  );
+
+  router.patch(
+    '/catalog/:id',
+    asyncHandler(async (req, res) => {
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!id.success) {
+        res.status(400).json({ error: 'invalid_id' });
+        return;
+      }
+      const item = await updateCatalogItem(pool, id.data, catalogItemUpdateSchema.parse(req.body));
+      if (!item) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      res.json(item);
+    }),
+  );
+
+  // Retires the item (active = false) instead of deleting the row, so past registrations stay intact.
+  router.delete(
+    '/catalog/:id',
+    asyncHandler(async (req, res) => {
+      const id = z.string().uuid().safeParse(req.params.id);
+      if (!id.success) {
+        res.status(400).json({ error: 'invalid_id' });
+        return;
+      }
+      const item = await updateCatalogItem(pool, id.data, { active: false });
+      if (!item) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+      res.json(item);
     }),
   );
 

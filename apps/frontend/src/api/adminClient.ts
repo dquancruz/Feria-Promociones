@@ -3,6 +3,9 @@ import type {
   AdminRegistrationFilters,
   AdminRegistrationsResponse,
   AdminStats,
+  CatalogItem,
+  CatalogItemInput,
+  CatalogItemUpdate,
   EventSettings,
   EventSettingsInput,
   EventUpdateResult,
@@ -104,4 +107,17 @@ export function deleteOutOfWindowRegistrations(expectedCount: number): Promise<A
     method: 'POST',
     body: JSON.stringify({ expectedCount }),
   });
+}
+
+export async function fetchAdminCatalog(): Promise<CatalogItem[]> {
+  const { items } = await adminRequest<{ items: CatalogItem[] }>('/api/admin/catalog');
+  return items;
+}
+
+export function createAdminCatalogItem(input: CatalogItemInput): Promise<CatalogItem> {
+  return adminRequest('/api/admin/catalog', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateAdminCatalogItem(id: string, update: CatalogItemUpdate): Promise<CatalogItem> {
+  return adminRequest(`/api/admin/catalog/${id}`, { method: 'PATCH', body: JSON.stringify(update) });
 }
