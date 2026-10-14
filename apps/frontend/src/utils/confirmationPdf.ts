@@ -65,10 +65,7 @@ function drawConfirmation(doc: jsPDF, confirmation: RegistrationConfirmation, ev
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text('Disagro', MARGIN, 16);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(12);
-  doc.text(eventName, RIGHT, 16, { align: 'right' });
+  doc.text(eventName, MARGIN, 16);
   y = 40;
 
   doc.setTextColor(...INK);
