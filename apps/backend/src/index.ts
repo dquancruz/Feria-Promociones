@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import { createApp } from './app.js';
 import { createPool } from './db/pool.js';
 import { runMigrations } from './db/migrate.js';

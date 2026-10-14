@@ -133,14 +133,16 @@ export function useAutosave(save: () => Promise<unknown>): Autosave {
     stopped.current = false;
   }, []);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // StrictMode (dev) mounts, unmounts and remounts every component once: the cleanup
+    // below runs in between, so a remount has to switch autosave back on.
+    stopped.current = false;
+    return () => {
       stopped.current = true;
       clearTimer();
       wake.current?.();
-    },
-    [clearTimer],
-  );
+    };
+  }, [clearTimer]);
 
   return { status, schedule, flush, stop, resume };
 }
