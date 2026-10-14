@@ -55,7 +55,6 @@ export function AdminApp() {
       <header className="site-header">
         <div className="site-header-inner">
           <div className="brand">
-            <span className="brand-name">Disagro</span>
             <h1>Feria de Promociones, administración</h1>
           </div>
           {session === 'ready' && (

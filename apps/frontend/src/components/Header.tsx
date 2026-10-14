@@ -22,7 +22,6 @@ export function Header({ event, saveStatus = 'idle' }: HeaderProps) {
     <header className="site-header">
       <div className="site-header-inner">
         <div className="brand">
-          <span className="brand-name">Disagro</span>
           <h1>{event?.name ?? 'Feria de Promociones'}</h1>
         </div>
         <div className="header-meta">
